@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{emailSubject}}</title>
+    <style>
+        /* Email-safe CSS */
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+        .container { max-width: 600px; margin: 0 auto; background: #ffffff; }
+        .header { background: {{branding.primaryColor}}; padding: 20px; text-align: center; }
+        .content { padding: 30px 20px; }
+        .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 12px; }
+        .btn { display: inline-block; padding: 12px 24px; background: {{branding.primaryColor}}; 
+               color: white; text-decoration: none; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Email Header -->
+        <div class="header">
+            {{#if branding.logo}}
+            <img src="{{branding.logo}}" alt="{{branding.companyName}}" 
+                 style="max-height: 50px; vertical-align: middle;">
+            {{#else}}
+            <h1 style="color: white; margin: 0;">{{branding.companyName}}</h1>
+            {{/if}}
+        </div>
+
+        <!-- Email Content -->
+        <div class="content">
+            {{#if user.firstName}}
+            <h2>Hi {{user.firstName}},</h2>
+            {{#else}}
+            <h2>Hello!</h2>
+            {{/if}}
+
+            {{#if emailType === "welcome"}}
+            <p>Welcome to {{branding.companyName}}! We're excited to have you on board.</p>
+            
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3>Your Account Details:</h3>
+                <ul style="list-style: none; padding: 0;">
+                    <li><strong>Email:</strong> {{user.email}}</li>
+                    <li><strong>Account Type:</strong> {{user.accountType}}</li>
+                    <li><strong>Member Since:</strong> {{user.joinDate}}</li>
+                </ul>
+            </div>
+
+            <p>Here's what you can do next:</p>
+            <ul>
+                {{#each nextSteps}}
+                <li>{{description}}</li>
+                {{/each}}
+            </ul>
+
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{{actionUrl}}" class="btn">Get Started</a>
+            </div>
+
+            {{#elseif emailType === "order-confirmation"}}
+            <p>Thank you for your order! We've received your purchase and it's being processed.</p>
+
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3>Order Summary</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr style="border-bottom: 1px solid #dee2e6;">
+                        <td><strong>Order Number:</strong></td>
+                        <td>{{order.number}}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #dee2e6;">
+                        <td><strong>Order Date:</strong></td>
+                        <td>{{order.date}}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #dee2e6;">
+                        <td><strong>Total Amount:</strong></td>
+                        <td><strong>${{order.total}}</strong></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Estimated Delivery:</strong></td>
+                        <td>{{order.estimatedDelivery}}</td>
+                    </tr>
+                </table>
+            </div>
+
+            <h3>Items Ordered:</h3>
+            {{#each order.items}}
+            <div style="border: 1px solid #dee2e6; padding: 15px; margin: 10px 0; border-radius: 4px;">
+                <div style="display: flex; align-items: center;">
+                    {{#if image}}
+                    <img src="{{image}}" alt="{{name}}" 
+                         style="width: 60px; height: 60px; object-fit: cover; margin-right: 15px;">
+                    {{/if}}
+                    <div style="flex: 1;">
+                        <h4 style="margin: 0 0 5px 0;">{{name}}</h4>
+                        <p style="margin: 0; color: #6c757d;">Quantity: {{quantity}}</p>
+                        <p style="margin: 5px 0 0 0; font-weight: bold;">${{price}}</p>
+                    </div>
+                </div>
+            </div>
+            {{/each}}
+
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{{order.trackingUrl}}" class="btn">Track Your Order</a>
+            </div>
+
+            {{#elseif emailType === "newsletter"}}
+            <p>Here's what's happening this {{newsletter.period}}:</p>
+
+            {{#each newsletter.sections}}
+            <div style="margin: 30px 0;">
+                <h3>{{title}}</h3>
+                {{#each articles}}
+                <div style="border-left: 4px solid {{../../branding.primaryColor}}; 
+                           padding-left: 15px; margin: 20px 0;">
+                    {{#if image}}
+                    <img src="{{image}}" alt="{{title}}" 
+                         style="width: 100%; max-width: 300px; height: auto; margin-bottom: 10px;">
+                    {{/if}}
+                    <h4 style="margin: 0 0 10px 0;">
+                        <a href="{{url}}" style="color: {{../../branding.primaryColor}}; text-decoration: none;">
+                            {{title}}
+                        </a>
+                    </h4>
+                    <p style="margin: 0 0 10px 0; color: #6c757d;">{{excerpt}}</p>
+                    <a href="{{url}}" style="color: {{../../branding.primaryColor}};">Read more →</a>
+                </div>
+                {{/each}}
+            </div>
+            {{/each}}
+
+            {{#if newsletter.promotions.length > 0}}
+            <div style="background: linear-gradient(45deg, {{branding.primaryColor}}, {{branding.secondaryColor}}); 
+                       color: white; padding: 25px; border-radius: 8px; text-align: center; margin: 30px 0;">
+                <h3 style="margin: 0 0 15px 0;">Special Offers Just for You!</h3>
+                {{#each newsletter.promotions}}
+                <div style="margin: 15px 0;">
+                    <h4 style="margin: 0 0 5px 0;">{{title}}</h4>
+                    <p style="margin: 0 0 10px 0;">{{description}}</p>
+                    {{#if code}}
+                    <div style="background: rgba(255,255,255,0.2); padding: 10px; border-radius: 4px; 
+                               font-family: monospace; font-size: 18px; font-weight: bold;">
+                        Code: {{code}}
+                    </div>
+                    {{/if}}
+                    <a href="{{url}}" style="color: white; text-decoration: underline;">
+                        Claim Offer →
+                    </a>
+                </div>
+                {{/each}}
+            </div>
+            {{/if}}
+
+            {{#elseif emailType === "password-reset"}}
+            <p>We received a request to reset your password. If you didn't make this request, you can ignore this email.</p>
+
+            <div style="background: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px 0; 
+                       border-left: 4px solid #ffc107;">
+                <h3 style="margin: 0 0 10px 0; color: #856404;">Security Information</h3>
+                <ul style="margin: 0; color: #856404;">
+                    <li>This link will expire in {{resetToken.expiryHours}} hours</li>
+                    <li>Request made from: {{requestInfo.ipAddress}}</li>
+                    <li>Device: {{requestInfo.userAgent}}</li>
+                    <li>Time: {{requestInfo.timestamp}}</li>
+                </ul>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{{resetToken.url}}" class="btn">Reset Password</a>
+            </div>
+
+            <p style="font-size: 14px; color: #6c757d;">
+                If the button doesn't work, you can copy and paste this link into your browser:<br>
+                <a href="{{resetToken.url}}" style="word-break: break-all;">{{resetToken.url}}</a>
+            </p>
+
+            {{#else}}
+            <!-- Default email content -->
+            <p>{{emailContent}}</p>
+            
+            {{#if actionButton}}
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{{actionButton.url}}" class="btn">{{actionButton.text}}</a>
+            </div>
+            {{/if}}
+            {{/if}}
+
+            {{#if personalizedRecommendations.length > 0}}
+            <div style="margin: 40px 0;">
+                <h3>Recommended for You</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+                    {{#each personalizedRecommendations}}
+                    <div style="text-align: center; padding: 15px; border: 1px solid #dee2e6; border-radius: 8px;">
+                        <img src="{{image}}" alt="{{title}}" 
+                             style="width: 100%; height: 100px; object-fit: cover; border-radius: 4px;">
+                        <h4 style="margin: 10px 0 5px 0; font-size: 14px;">{{title}}</h4>
+                        <p style="margin: 0 0 10px 0; font-size: 12px; color: #6c757d;">${{price}}</p>
+                        <a href="{{url}}" style="color: {{../branding.primaryColor}}; font-size: 12px;">
+                            View Details
+                        </a>
+                    </div>
+                    {{/each}}
+                </div>
+            </div>
+            {{/if}}
+
+            <p>Best regards,<br>
+            The {{branding.companyName}} Team</p>
+        </div>
+
+        <!-- Email Footer -->
+        <div class="footer">
+            <div style="margin-bottom: 15px;">
+                {{#each branding.socialLinks}}
+                <a href="{{url}}" style="margin: 0 10px; color: #6c757d; text-decoration: none;">
+                    {{name}}
+                </a>
+                {{/each}}
+            </div>
+            
+            <p style="margin: 5px 0; color: #6c757d;">
+                {{branding.companyName}}<br>
+                {{branding.address.street}}<br>
+                {{branding.address.city}}, {{branding.address.state}} {{branding.address.zip}}
+            </p>
+            
+            <p style="margin: 15px 0 5px 0;">
+                <a href="{{unsubscribeUrl}}" style="color: #6c757d;">Unsubscribe</a> |
+                <a href="{{preferencesUrl}}" style="color: #6c757d;">Email Preferences</a> |
+                <a href="{{privacyUrl}}" style="color: #6c757d;">Privacy Policy</a>
+            </p>
+            
+            <p style="margin: 5px 0; font-size: 11px; color: #adb5bd;">
+                This email was sent to {{user.email}}. 
+                {{#if user.firstName}}
+                If you're not {{user.firstName}}, you can 
+                <a href="{{reportUrl}}" style="color: #adb5bd;">report this email</a>.
+                {{/if}}
+            </p>
+        </div>
+    </div>
+</body>
+</html>

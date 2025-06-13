@@ -1,0 +1,15 @@
+<div class="user-card">
+    <h2>{{name}}</h2>
+    <p>Email: {{email}}</p>
+    {{#isActive}}
+    <span class="status active">Active</span>
+    {{/isActive}}
+    {{^isActive}}
+    <span class="status inactive">Inactive</span>
+    {{/isActive}}
+    <div class="tags">
+        {{#tags}}
+        <span class="tag">{{.}}</span>
+        {{/tags}}
+    </div>
+</div>

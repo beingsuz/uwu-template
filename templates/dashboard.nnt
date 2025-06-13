@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{dashboard.title}} - Analytics Dashboard</title>
+</head>
+<body>
+    <div class="dashboard-layout">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>{{companyName}}</h2>
+                <div class="user-info">
+                    <img src="{{user.avatar}}" alt="{{user.name}}" class="user-avatar">
+                    <div class="user-details">
+                        <span class="user-name">{{user.name}}</span>
+                        <span class="user-role">{{user.role}}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <ul>
+                    {{#each navigation}}
+                    <li class="nav-item {{#if isActive}}active{{/if}}">
+                        <a href="{{url}}" class="nav-link">
+                            <span class="nav-icon">{{icon}}</span>
+                            <span class="nav-text">{{title}}</span>
+                            {{#if badge}}
+                            <span class="nav-badge">{{badge}}</span>
+                            {{/if}}
+                        </a>
+                    </li>
+                    {{/each}}
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header class="dashboard-header">
+                <div class="header-content">
+                    <h1>{{dashboard.title}}</h1>
+                    <div class="header-actions">
+                        <div class="date-range">
+                            <select class="date-filter">
+                                {{#each dateRanges}}
+                                <option value="{{value}}" {{#if selected}}selected{{/if}}>
+                                    {{label}}
+                                </option>
+                                {{/each}}
+                            </select>
+                        </div>
+                        <button class="btn btn-primary export-data">
+                            Export Data
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <div class="dashboard-content">
+                <!-- Key Metrics Cards -->
+                <div class="metrics-grid">
+                    {{#each metrics}}
+                    <div class="metric-card {{#if trend.isPositive}}positive{{#elseif trend.isNegative}}negative{{#else}}neutral{{/if}}">
+                        <div class="metric-header">
+                            <h3>{{title}}</h3>
+                            <span class="metric-icon">{{icon}}</span>
+                        </div>
+                        <div class="metric-value">
+                            <span class="value">{{value}}</span>
+                            <span class="unit">{{unit}}</span>
+                        </div>
+                        <div class="metric-trend">
+                            <span class="trend-indicator">
+                                {{#if trend.isPositive}}📈{{#elseif trend.isNegative}}📉{{#else}}➡️{{/if}}
+                            </span>
+                            <span class="trend-value">{{trend.percentage}}%</span>
+                            <span class="trend-period">vs {{trend.period}}</span>
+                        </div>
+                        <div class="metric-description">{{description}}</div>
+                    </div>
+                    {{/each}}
+                </div>
+
+                <!-- Charts Section -->
+                <div class="charts-section">
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>{{charts.main.title}}</h3>
+                            <div class="chart-controls">
+                                {{#each charts.main.filters}}
+                                <button class="chart-filter {{#if active}}active{{/if}}" 
+                                        data-filter="{{value}}">
+                                    {{label}}
+                                </button>
+                                {{/each}}
+                            </div>
+                        </div>
+                        <div class="chart-content" id="main-chart">
+                            <!-- Chart data points -->
+                            {{#each charts.main.dataPoints}}
+                            <div class="data-point" 
+                                 data-value="{{value}}" 
+                                 data-label="{{label}}" 
+                                 data-date="{{date}}">
+                                <div class="point-tooltip">
+                                    <strong>{{label}}</strong><br>
+                                    Value: {{formattedValue}}<br>
+                                    Date: {{formattedDate}}
+                                </div>
+                            </div>
+                            {{/each}}
+                        </div>
+                    </div>
+
+                    <div class="chart-grid">
+                        {{#each charts.secondary}}
+                        <div class="mini-chart">
+                            <h4>{{title}}</h4>
+                            <div class="chart-value">{{currentValue}}</div>
+                            <div class="chart-sparkline">
+                                {{#each dataPoints}}
+                                <span class="sparkline-point" data-value="{{value}}"></span>
+                                {{/each}}
+                            </div>
+                        </div>
+                        {{/each}}
+                    </div>
+                </div>
+
+                <!-- Data Tables -->
+                <div class="tables-section">
+                    {{#each tables}}
+                    <div class="table-container">
+                        <div class="table-header">
+                            <h3>{{title}}</h3>
+                            <div class="table-actions">
+                                <input type="search" placeholder="Search {{title.toLowerCase()}}..." 
+                                       class="table-search">
+                                <button class="btn btn-outline">Export</button>
+                            </div>
+                        </div>
+                        
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        {{#each columns}}
+                                        <th class="{{#if sortable}}sortable{{/if}} {{#if sorted}}sorted-{{direction}}{{/if}}" 
+                                            data-column="{{key}}">
+                                            {{label}}
+                                            {{#if sortable}}
+                                            <span class="sort-indicator">⇅</span>
+                                            {{/if}}
+                                        </th>
+                                        {{/each}}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {{#each data}}
+                                    <tr class="table-row {{#if highlighted}}highlighted{{/if}}" 
+                                        data-row-id="{{id}}">
+                                        {{#each ../columns}}
+                                        <td class="{{cssClass}}" data-column="{{key}}">
+                                            {{#if isStatus}}
+                                            <span class="status-badge status-{{lookup ../this key}}">
+                                                {{lookup ../this key}}
+                                            </span>
+                                            {{#elseif isAction}}
+                                            <div class="table-actions">
+                                                {{#each actions}}
+                                                <button class="btn btn-sm {{class}}" 
+                                                        data-action="{{action}}" 
+                                                        data-id="{{lookup ../../this ../key}}">
+                                                    {{label}}
+                                                </button>
+                                                {{/each}}
+                                            </div>
+                                            {{#elseif isNumber}}
+                                            <span class="number-value">{{formatNumber (lookup ../this key)}}</span>
+                                            {{#else}}
+                                            {{lookup ../this key}}
+                                            {{/if}}
+                                        </td>
+                                        {{/each}}
+                                    </tr>
+                                    {{/each}}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {{#if pagination}}
+                        <div class="table-pagination">
+                            <div class="pagination-info">
+                                Showing {{pagination.start}}-{{pagination.end}} of {{pagination.total}} items
+                            </div>
+                            <div class="pagination-controls">
+                                {{#if pagination.hasPrev}}
+                                <button class="btn btn-outline" data-page="{{pagination.prevPage}}">
+                                    Previous
+                                </button>
+                                {{/if}}
+                                
+                                {{#each pagination.pages}}
+                                <button class="btn {{#if isCurrent}}btn-primary{{#else}}btn-outline{{/if}}" 
+                                        data-page="{{number}}">
+                                    {{number}}
+                                </button>
+                                {{/each}}
+                                
+                                {{#if pagination.hasNext}}
+                                <button class="btn btn-outline" data-page="{{pagination.nextPage}}">
+                                    Next
+                                </button>
+                                {{/if}}
+                            </div>
+                        </div>
+                        {{/if}}
+                    </div>
+                    {{/each}}
+                </div>
+
+                <!-- Recent Activity Feed -->
+                {{#if activities.length > 0}}
+                <div class="activity-section">
+                    <h3>Recent Activity</h3>
+                    <div class="activity-feed">
+                        {{#each activities}}
+                        <div class="activity-item {{type}}">
+                            <div class="activity-avatar">
+                                {{#if user.avatar}}
+                                <img src="{{user.avatar}}" alt="{{user.name}}">
+                                {{#else}}
+                                <div class="avatar-placeholder">{{user.initials}}</div>
+                                {{/if}}
+                            </div>
+                            <div class="activity-content">
+                                <div class="activity-text">
+                                    <strong>{{user.name}}</strong> {{action}} 
+                                    {{#if target}}
+                                    <a href="{{target.url}}" class="activity-link">{{target.name}}</a>
+                                    {{/if}}
+                                </div>
+                                <div class="activity-meta">
+                                    <time datetime="{{timestamp}}">{{formattedTime}}</time>
+                                    {{#if location}}
+                                    <span class="activity-location">from {{location}}</span>
+                                    {{/if}}
+                                </div>
+                            </div>
+                            <div class="activity-icon">{{icon}}</div>
+                        </div>
+                        {{/each}}
+                    </div>
+                </div>
+                {{/if}}
+            </div>
+        </main>
+    </div>
+
+    <!-- Live Data Updates -->
+    <div class="live-updates" id="live-updates">
+        {{#if liveData.enabled}}
+        <div class="update-indicator">
+            <span class="pulse"></span>
+            Last updated: <span id="last-update">{{liveData.lastUpdate}}</span>
+        </div>
+        {{/if}}
+    </div>
+</body>
+</html>

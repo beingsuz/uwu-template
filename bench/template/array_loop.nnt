@@ -1,5 +1,0 @@
-{{#if items.list}}
-	{{#each items.list}}
-		{{list}} - {{user}}
-	{{/each}}
-{{/if}}

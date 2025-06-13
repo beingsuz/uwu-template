@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{title}} - E-commerce Store</title>
+    <meta name="description" content="{{description}}">
+</head>
+<body>
+    <header class="header">
+        <nav class="navbar">
+            <div class="container">
+                <a href="/" class="logo">{{siteName}}</a>
+                <ul class="nav-menu">
+                    <li><a href="/products">Products</a></li>
+                    <li><a href="/cart">Cart ({{cartCount}})</a></li>
+                    {{#user.isLoggedIn}}
+                    <li><a href="/profile">{{user.name}}</a></li>
+                    <li><a href="/logout">Logout</a></li>
+                    {{/user.isLoggedIn}}
+                    {{^user.isLoggedIn}}
+                    <li><a href="/login">Login</a></li>
+                    <li><a href="/register">Register</a></li>
+                    {{/user.isLoggedIn}}
+                </ul>
+            </div>
+        </nav>
+    </header>
+
+    <main class="main-content">
+        <div class="container">
+            <h1>{{pageTitle}}</h1>
+            
+            {{#products}}
+            <div class="products-grid">
+                {{#.}}
+                <div class="product-card" data-id="{{id}}">
+                    <div class="product-image">
+                        <img src="{{image}}" alt="{{name}}" loading="lazy">
+                        {{#discount}}
+                        <span class="discount-badge">-{{discount}}%</span>
+                        {{/discount}}
+                    </div>
+                    <div class="product-info">
+                        <h3 class="product-name">{{name}}</h3>
+                        <p class="product-description">{{description}}</p>
+                        <div class="product-rating">
+                            {{#stars}}
+                            <span class="star {{#.}}filled{{/.}}">★</span>
+                            {{/stars}}
+                            <span class="rating-count">({{reviewCount}} reviews)</span>
+                        </div>
+                        <div class="product-price">
+                            {{#originalPrice}}
+                            <span class="original-price">${{originalPrice}}</span>
+                            {{/originalPrice}}
+                            <span class="current-price">${{price}}</span>
+                        </div>
+                        <div class="product-actions">
+                            {{#inStock}}
+                            <button class="btn btn-primary add-to-cart" data-product-id="{{id}}">
+                                Add to Cart
+                            </button>
+                            {{/inStock}}
+                            {{^inStock}}
+                            <button class="btn btn-secondary" disabled>
+                                Out of Stock
+                            </button>
+                            {{/inStock}}
+                            <button class="btn btn-outline wishlist" data-product-id="{{id}}">
+                                ♥ Wishlist
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {{/.}}
+            </div>
+            {{/products}}
+            {{^products}}
+            <div class="empty-state">
+                <h2>No products found</h2>
+                <p>Try adjusting your search criteria or browse our categories.</p>
+                <a href="/products" class="btn btn-primary">Browse All Products</a>
+            </div>
+            {{/products}}
+
+            {{#pagination.totalPages}}
+            <div class="pagination">
+                {{#pagination.hasPrev}}
+                <a href="?page={{pagination.prevPage}}" class="page-link">← Previous</a>
+                {{/pagination.hasPrev}}
+                
+                {{#pagination.pages}}
+                {{#isCurrent}}
+                <span class="page-link current">{{number}}</span>
+                {{/isCurrent}}
+                {{^isCurrent}}
+                <a href="?page={{number}}" class="page-link">{{number}}</a>
+                {{/isCurrent}}
+                {{/pagination.pages}}
+                
+                {{#pagination.hasNext}}
+                <a href="?page={{pagination.nextPage}}" class="page-link">Next →</a>
+                {{/pagination.hasNext}}
+            </div>
+            {{/pagination.totalPages}}
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>About {{siteName}}</h4>
+                    <p>{{siteDescription}}</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Customer Service</h4>
+                    <ul>
+                        <li><a href="/contact">Contact Us</a></li>
+                        <li><a href="/shipping">Shipping Info</a></li>
+                        <li><a href="/returns">Returns</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Follow Us</h4>
+                    {{#socialLinks}}
+                    <a href="{{url}}" class="social-link">{{name}}</a>
+                    {{/socialLinks}}
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; {{currentYear}} {{siteName}}. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>

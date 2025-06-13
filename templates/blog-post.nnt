@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{blogTitle}} - {{post.title}}</title>
+    <meta name="description" content="{{post.excerpt}}">
+    <meta name="author" content="{{post.author.name}}">
+    <meta property="og:title" content="{{post.title}}">
+    <meta property="og:description" content="{{post.excerpt}}">
+    <meta property="og:image" content="{{post.featuredImage}}">
+    <link rel="canonical" href="{{post.canonicalUrl}}">
+</head>
+<body>
+    {{> header}}
+
+    <article class="blog-post">
+        <header class="post-header">
+            <div class="container">
+                {{#if post.category}}
+                <div class="post-category">
+                    <a href="/category/{{post.category.slug}}" class="category-link">
+                        {{post.category.name}}
+                    </a>
+                </div>
+                {{/if}}
+                
+                <h1 class="post-title">{{post.title}}</h1>
+                
+                <div class="post-meta">
+                    <div class="author-info">
+                        <img src="{{post.author.avatar}}" alt="{{post.author.name}}" class="author-avatar">
+                        <div class="author-details">
+                            <span class="author-name">{{post.author.name}}</span>
+                            <span class="author-bio">{{post.author.bio}}</span>
+                        </div>
+                    </div>
+                    <div class="post-date">
+                        <time datetime="{{post.publishedAt}}">{{post.formattedDate}}</time>
+                    </div>
+                    <div class="reading-time">
+                        {{post.readingTime}} min read
+                    </div>
+                    <div class="post-stats">
+                        <span class="view-count">{{post.views}} views</span>
+                        <span class="comment-count">{{post.commentCount}} comments</span>
+                    </div>
+                </div>
+
+                {{#if post.featuredImage}}
+                <div class="featured-image">
+                    <img src="{{post.featuredImage}}" alt="{{post.title}}" loading="lazy">
+                    {{#if post.imageCaption}}
+                    <figcaption>{{post.imageCaption}}</figcaption>
+                    {{/if}}
+                </div>
+                {{/if}}
+            </div>
+        </header>
+
+        <div class="post-content">
+            <div class="container">
+                <div class="content-wrapper">
+                    <div class="post-body">
+                        {{post.content}}
+                        
+                        {{#if post.tags.length > 0}}
+                        <div class="post-tags">
+                            <h4>Tags:</h4>
+                            {{#each post.tags}}
+                            <a href="/tag/{{slug}}" class="tag">{{name}}</a>
+                            {{/each}}
+                        </div>
+                        {{/if}}
+                    </div>
+
+                    <aside class="post-sidebar">
+                        <div class="table-of-contents">
+                            <h4>Table of Contents</h4>
+                            <ul>
+                                {{#each post.tableOfContents}}
+                                <li class="toc-level-{{level}}">
+                                    <a href="#{{anchor}}">{{title}}</a>
+                                </li>
+                                {{/each}}
+                            </ul>
+                        </div>
+
+                        <div class="share-buttons">
+                            <h4>Share this post</h4>
+                            <a href="https://twitter.com/intent/tweet?url={{post.url}}&text={{post.title}}" 
+                               class="share-btn twitter" target="_blank">Twitter</a>
+                            <a href="https://www.facebook.com/sharer/sharer.php?u={{post.url}}" 
+                               class="share-btn facebook" target="_blank">Facebook</a>
+                            <a href="https://www.linkedin.com/sharing/share-offsite/?url={{post.url}}" 
+                               class="share-btn linkedin" target="_blank">LinkedIn</a>
+                        </div>
+
+                        {{#if relatedPosts.length > 0}}
+                        <div class="related-posts">
+                            <h4>Related Posts</h4>
+                            {{#each relatedPosts}}
+                            <article class="related-post">
+                                <a href="{{url}}" class="related-post-link">
+                                    {{#if thumbnail}}
+                                    <img src="{{thumbnail}}" alt="{{title}}" class="related-thumbnail">
+                                    {{/if}}
+                                    <div class="related-content">
+                                        <h5>{{title}}</h5>
+                                        <span class="related-date">{{formattedDate}}</span>
+                                    </div>
+                                </a>
+                            </article>
+                            {{/each}}
+                        </div>
+                        {{/if}}
+                    </aside>
+                </div>
+            </div>
+        </div>
+    </article>
+
+    <section class="comments-section">
+        <div class="container">
+            <h3>Comments ({{post.commentCount}})</h3>
+            
+            {{#if user.isLoggedIn}}
+            <form class="comment-form" action="/comments" method="post">
+                <input type="hidden" name="postId" value="{{post.id}}">
+                <div class="form-group">
+                    <label for="comment">Leave a comment:</label>
+                    <textarea name="comment" id="comment" rows="4" required 
+                              placeholder="Share your thoughts..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">Post Comment</button>
+            </form>
+            {{#else}}
+            <p class="login-prompt">
+                <a href="/login">Login</a> to leave a comment.
+            </p>
+            {{/if}}
+
+            {{#if comments.length > 0}}
+            <div class="comments-list">
+                {{#each comments}}
+                <div class="comment" data-comment-id="{{id}}">
+                    <div class="comment-header">
+                        <img src="{{author.avatar}}" alt="{{author.name}}" class="comment-avatar">
+                        <div class="comment-meta">
+                            <span class="comment-author">{{author.name}}</span>
+                            <time class="comment-date" datetime="{{createdAt}}">{{formattedDate}}</time>
+                        </div>
+                        {{#if canEdit}}
+                        <div class="comment-actions">
+                            <button class="edit-comment" data-comment-id="{{id}}">Edit</button>
+                            <button class="delete-comment" data-comment-id="{{id}}">Delete</button>
+                        </div>
+                        {{/if}}
+                    </div>
+                    <div class="comment-content">
+                        {{content}}
+                    </div>
+                    <div class="comment-footer">
+                        <button class="like-comment" data-comment-id="{{id}}">
+                            👍 {{likeCount}}
+                        </button>
+                        <button class="reply-comment" data-comment-id="{{id}}">
+                            Reply
+                        </button>
+                    </div>
+                    
+                    {{#if replies.length > 0}}
+                    <div class="comment-replies">
+                        {{#each replies}}
+                        <div class="comment reply">
+                            <div class="comment-header">
+                                <img src="{{author.avatar}}" alt="{{author.name}}" class="comment-avatar">
+                                <span class="comment-author">{{author.name}}</span>
+                                <time class="comment-date">{{formattedDate}}</time>
+                            </div>
+                            <div class="comment-content">{{content}}</div>
+                        </div>
+                        {{/each}}
+                    </div>
+                    {{/if}}
+                </div>
+                {{/each}}
+            </div>
+            {{#else}}
+            <p class="no-comments">No comments yet. Be the first to comment!</p>
+            {{/if}}
+        </div>
+    </section>
+
+    {{> footer}}
+</body>
+</html>

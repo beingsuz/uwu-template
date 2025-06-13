@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{title}} - E-commerce Store</title>
+    <meta name="description" content="{{description}}">
+</head>
+<body>
+    <header class="header">
+        <nav class="navbar">
+            <div class="container">
+                <a href="/" class="logo">{{siteName}}</a>
+                <ul class="nav-menu">
+                    <li><a href="/products">Products</a></li>
+                    <li><a href="/cart">Cart ({{cartCount}})</a></li>
+                    {{#if user.isLoggedIn}}
+                    <li><a href="/profile">{{user.name}}</a></li>
+                    <li><a href="/logout">Logout</a></li>
+                    {{else}}
+                    <li><a href="/login">Login</a></li>
+                    <li><a href="/register">Register</a></li>
+                    {{/if}}
+                </ul>
+            </div>
+        </nav>
+    </header>
+
+    <main class="main-content">
+        <div class="container">
+            <h1>{{pageTitle}}</h1>
+            
+            {{#if products.length}}
+            <div class="products-grid">
+                {{#each products}}
+                <div class="product-card" data-id="{{id}}">
+                    <div class="product-image">
+                        <img src="{{image}}" alt="{{name}}" loading="lazy">
+                        {{#if discount}}
+                        <span class="discount-badge">-{{discount}}%</span>
+                        {{/if}}
+                    </div>
+                    <div class="product-info">
+                        <h3 class="product-name">{{name}}</h3>
+                        <p class="product-description">{{description}}</p>
+                        <div class="product-rating">
+                            {{#each stars}}
+                            <span class="star {{#if this}}filled{{/if}}">★</span>
+                            {{/each}}
+                            <span class="rating-count">({{reviewCount}} reviews)</span>
+                        </div>
+                        <div class="product-price">
+                            {{#if originalPrice}}
+                            <span class="original-price">${{originalPrice}}</span>
+                            {{/if}}
+                            <span class="current-price">${{price}}</span>
+                        </div>
+                        <div class="product-actions">
+                            {{#if inStock}}
+                            <button class="btn btn-primary add-to-cart" data-product-id="{{id}}">
+                                Add to Cart
+                            </button>
+                            {{else}}
+                            <button class="btn btn-secondary" disabled>
+                                Out of Stock
+                            </button>
+                            {{/if}}
+                            <button class="btn btn-outline wishlist" data-product-id="{{id}}">
+                                ♥ Wishlist
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {{/each}}
+            </div>
+            {{else}}
+            <div class="empty-state">
+                <h2>No products found</h2>
+                <p>Try adjusting your search criteria or browse our categories.</p>
+                <a href="/products" class="btn btn-primary">Browse All Products</a>
+            </div>
+            {{/if}}
+
+            {{#if pagination.totalPages}}
+            <div class="pagination">
+                {{#if pagination.hasPrev}}
+                <a href="?page={{pagination.prevPage}}" class="page-link">← Previous</a>
+                {{/if}}
+                
+                {{#each pagination.pages}}
+                {{#if isCurrent}}
+                <span class="page-link current">{{number}}</span>
+                {{else}}
+                <a href="?page={{number}}" class="page-link">{{number}}</a>
+                {{/if}}
+                {{/each}}
+                
+                {{#if pagination.hasNext}}
+                <a href="?page={{pagination.nextPage}}" class="page-link">Next →</a>
+                {{/if}}
+            </div>
+            {{/if}}
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>About {{siteName}}</h4>
+                    <p>{{siteDescription}}</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Customer Service</h4>
+                    <ul>
+                        <li><a href="/contact">Contact Us</a></li>
+                        <li><a href="/shipping">Shipping Info</a></li>
+                        <li><a href="/returns">Returns</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Follow Us</h4>
+                    {{#each socialLinks}}
+                    <a href="{{url}}" class="social-link">{{name}}</a>
+                    {{/each}}
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; {{currentYear}} {{siteName}}. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
