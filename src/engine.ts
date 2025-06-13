@@ -5,6 +5,26 @@ export interface CompilerOptions {
     escape: boolean;
 }
 
+// Define helper types
+export interface HelperFunction {
+    (value: unknown, options?: HelperOptions): string;
+}
+
+export interface BlockHelperFunction {
+    (context: unknown, options: BlockHelperOptions): string;
+}
+
+export interface HelperOptions {
+    hash?: Record<string, unknown>;
+    data?: unknown;
+}
+
+export interface BlockHelperOptions extends HelperOptions {
+    fn: (context?: unknown) => string;
+    inverse: (context?: unknown) => string;
+    blockParams?: string[];
+}
+
 // Fast escape function using lookup table
 const ESCAPE_TABLE = new Array(256);
 ESCAPE_TABLE[38] = "&amp;";   // &
@@ -37,7 +57,9 @@ const layoutCache = new Map<string, (data: unknown) => string>();
 // Cache for compiled functions
 const compiledCache = new Map<string, (data: unknown) => string>();
 // Store registered helpers
-const helpers = new Map<string, Function>();
+const helpers = new Map<string, HelperFunction | BlockHelperFunction>();
+// Store block helpers specifically
+const blockHelpers = new Map<string, BlockHelperFunction>();
 
 export function registerLayout(name: string, content: string) {
     layouts.set(name, content);
@@ -45,14 +67,19 @@ export function registerLayout(name: string, content: string) {
     layoutCache.delete(name);
 }
 
-export function registerHelper(name: string, fn: Function) {
+export function registerHelper(name: string, fn: HelperFunction | BlockHelperFunction) {
+    helpers.set(name, fn);
+}
+
+export function registerBlockHelper(name: string, fn: BlockHelperFunction) {
+    blockHelpers.set(name, fn);
     helpers.set(name, fn);
 }
 
 /**
  * Backwards compatibility function for renderTemplate
  */
-export function renderTemplate(key: string, data: unknown, template: string): string {
+export function renderTemplate(_key: string, data: unknown, template: string): string {
     const compiled = compile(template);
     return compiled(data);
 }
@@ -140,7 +167,7 @@ function processTemplate(template: string, options: CompilerOptions, dataVar: st
 }
 
 interface TemplateConstruct {
-    type: 'variable' | 'if' | 'each' | 'layout';
+    type: 'variable' | 'if' | 'each' | 'layout' | 'blockHelper';
     start: number;
     end: number;
     variable?: string;
@@ -148,6 +175,7 @@ interface TemplateConstruct {
     content?: string;
     elseContent?: string;
     elseifConditions?: Array<{condition: string, content: string}>;
+    helperArgs?: string;
 }
 
 /**
@@ -186,8 +214,7 @@ function findNextConstruct(template: string, startPos: number): TemplateConstruc
             priority: 2
         });
     }
-    
-    // Each block {{#each}} ... {{/each}} - lower priority (complex)
+      // Each block {{#each}} ... {{/each}} - lower priority (complex)
     const eachMatch = remaining.match(/\{\{#each\s+([^}]+)\}\}/);
     if (eachMatch && eachMatch.index !== undefined) {
         const blockStart = startPos + eachMatch.index;
@@ -205,6 +232,32 @@ function findNextConstruct(template: string, startPos: number): TemplateConstruc
                 },
                 priority: 3
             });
+        }
+    }
+    
+    // Block helper {{#helperName}} ... {{/helperName}} - similar priority to each
+    const blockHelperMatch = remaining.match(/\{\{#(\w+)(?:\s+([^}]*))?\}\}/);
+    if (blockHelperMatch && blockHelperMatch.index !== undefined) {
+        const helperName = blockHelperMatch[1];
+        // Skip built-in helpers
+        if (!['if', 'each', 'elseif', 'else'].includes(helperName)) {
+            const blockStart = startPos + blockHelperMatch.index;
+            const blockEnd = findMatchingBlockEnd(template, blockStart, helperName);
+            if (blockEnd > blockStart) {
+                const contentStart = blockStart + blockHelperMatch[0].length;
+                const contentEnd = blockEnd - `{{/${helperName}}}`.length;
+                possibilities.push({
+                    construct: {
+                        type: 'blockHelper',
+                        start: blockStart,
+                        end: blockEnd,
+                        variable: helperName,
+                        content: template.slice(contentStart, contentEnd),
+                        helperArgs: blockHelperMatch[2]?.trim() || ''
+                    },
+                    priority: 3
+                });
+            }
         }
     }
       // If block {{#if}} ... {{#elseif}} ... {{#else}} ... {{/if}} - lowest priority (most complex)
@@ -302,7 +355,10 @@ function generateConstructCode(construct: TemplateConstruct, options: CompilerOp
         case 'layout':
             return generateLayoutCode(construct.variable!, options, dataVar);
         case 'each':
-            return generateEachCode(construct.variable!, construct.content!, options, dataVar);        case 'if':
+            return generateEachCode(construct.variable!, construct.content!, options, dataVar);
+        case 'blockHelper':
+            return generateBlockHelperCode(construct.variable!, construct.content!, construct.helperArgs || '', options, dataVar);
+        case 'if':
             return generateIfCode(construct.condition!, construct.content!, construct.elseContent || '', construct.elseifConditions || [], options, dataVar);
         default:
             return '';
@@ -313,6 +369,13 @@ function generateConstructCode(construct: TemplateConstruct, options: CompilerOp
  * Generate code for a variable
  */
 function generateVariableCode(variable: string, options: CompilerOptions, dataVar: string): string {
+    // Check if this is a helper call
+    const helperMatch = variable.match(/^(\w+)\s+(.+)$/);
+    if (helperMatch) {
+        const [, helperName, helperArgs] = helperMatch;
+        return generateHelperCall(helperName, helperArgs, options, dataVar);
+    }
+    
     const accessor = generateDataAccessor(variable, dataVar);
     const varName = `val_${Math.random().toString(36).substr(2, 9)}`;
     
@@ -370,6 +433,94 @@ function generateEachCode(variable: string, content: string, options: CompilerOp
         for (let ${indexVar} = 0; ${indexVar} < arr.length; ${indexVar}++) {
             const ${itemVar} = arr[${indexVar}];
             ${innerCode}
+        }
+    }
+}
+`;
+}
+
+/**
+ * Generate code for a block helper
+ */
+function generateBlockHelperCode(helperName: string, content: string, helperArgs: string, options: CompilerOptions, dataVar: string): string {
+    const { args, hash } = parseHelperArguments(helperArgs);
+    
+    const fnName = `fn_${Math.random().toString(36).substr(2, 9)}`;
+    const inverseName = `inverse_${Math.random().toString(36).substr(2, 9)}`;
+    const hashName = `hash_${Math.random().toString(36).substr(2, 9)}`;
+    const resultName = `result_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Parse if/else structure in the block content
+    const blockStructure = parseBlockHelperStructure(content);
+    
+    // Generate hash object
+    const hashCode = Object.entries(hash).length > 0 
+        ? `const ${hashName} = {${Object.entries(hash).map(([key, value]) => {
+            // If value is a quoted string, use it as a literal
+            if ((value.startsWith('"') && value.endsWith('"')) || 
+                (value.startsWith("'") && value.endsWith("'"))) {
+                return `${JSON.stringify(key)}: ${JSON.stringify(value.slice(1, -1))}`;
+            } else {
+                // Otherwise treat as a data accessor
+                return `${JSON.stringify(key)}: ${generateDataAccessor(value, dataVar)}`;
+            }
+          }).join(', ')}};`
+        : `const ${hashName} = {};`;
+    
+    // Generate the fn and inverse functions
+    const fnCode = `
+        const ${fnName} = (context) => {
+            const childData = context || ${dataVar};
+            let childResult = '';
+            ${processTemplate(blockStructure.mainContent, options, 'childData').replace(/result \+=/g, 'childResult +=')}
+            return childResult;
+        };
+    `;
+    
+    const inverseCode = `
+        const ${inverseName} = (context) => {
+            const childData = context || ${dataVar};
+            let childResult = '';
+            ${processTemplate(blockStructure.elseContent, options, 'childData').replace(/result \+=/g, 'childResult +=')}
+            return childResult;
+        };
+    `;
+    
+    // Generate the helper call
+    let contextArg = dataVar;
+    if (args.length > 0) {
+        const firstArg = args[0];
+        // If first argument is a quoted string, use it as a literal
+        if ((firstArg.startsWith('"') && firstArg.endsWith('"')) || 
+            (firstArg.startsWith("'") && firstArg.endsWith("'"))) {
+            contextArg = JSON.stringify(firstArg.slice(1, -1));
+        } else if (firstArg === 'true') {
+            contextArg = 'true';
+        } else if (firstArg === 'false') {
+            contextArg = 'false';
+        } else if (/^\d+$/.test(firstArg)) {
+            contextArg = firstArg;
+        } else {
+            // Otherwise treat as a data accessor
+            contextArg = generateDataAccessor(firstArg, dataVar);
+        }
+    }
+    
+    return `
+{
+    if (helpers.has(${JSON.stringify(helperName)})) {
+        ${hashCode}
+        ${fnCode}
+        ${inverseCode}
+        const helperOptions = {
+            fn: ${fnName},
+            inverse: ${inverseName},
+            hash: ${hashName},
+            data: ${dataVar}
+        };
+        const ${resultName} = helpers.get(${JSON.stringify(helperName)})?.call(null, ${contextArg}, helperOptions);
+        if (${resultName} != null) {
+            result += String(${resultName});
         }
     }
 }
@@ -539,4 +690,139 @@ function parseIfElseStructure(content: string): {
     }
     
     return { ifContent, elseifConditions, elseContent };
+}
+
+/**
+ * Parse block helper structure to separate main content from else content
+ */
+function parseBlockHelperStructure(content: string): { mainContent: string; elseContent: string } {
+    const elsePattern = /\{\{else\}\}/;
+    const elseMatch = content.match(elsePattern);
+    
+    if (elseMatch && elseMatch.index !== undefined) {
+        const mainContent = content.slice(0, elseMatch.index).trim();
+        const elseContent = content.slice(elseMatch.index + elseMatch[0].length).trim();
+        return { mainContent, elseContent };
+    }
+    
+    return { mainContent: content, elseContent: '' };
+}
+
+/**
+ * Generate helper call with options support
+ */
+function generateHelperCall(helperName: string, helperArgs: string, options: CompilerOptions, dataVar: string): string {
+    // Parse helper arguments and hash options
+    const { args, hash } = parseHelperArguments(helperArgs);
+    
+    const varName = `helper_${Math.random().toString(36).substr(2, 9)}`;
+    const hashName = `hash_${Math.random().toString(36).substr(2, 9)}`;
+      // Generate code to build hash object
+    const hashCode = Object.entries(hash).length > 0 
+        ? `const ${hashName} = {${Object.entries(hash).map(([key, value]) => {
+            // If value is a quoted string, use it as a literal
+            if ((value.startsWith('"') && value.endsWith('"')) || 
+                (value.startsWith("'") && value.endsWith("'"))) {
+                return `${JSON.stringify(key)}: ${JSON.stringify(value.slice(1, -1))}`;
+            } else {
+                // Otherwise treat as a data accessor
+                return `${JSON.stringify(key)}: ${generateDataAccessor(value, dataVar)}`;
+            }
+          }).join(', ')}};`
+        : `const ${hashName} = {};`;
+    
+    // Generate code to call helper
+    const helperCode = args.length > 0 
+        ? `const ${varName} = helpers.get(${JSON.stringify(helperName)})?.call(null, ${args.map(arg => generateDataAccessor(arg, dataVar)).join(', ')}, { hash: ${hashName}, data: ${dataVar} });`
+        : `const ${varName} = helpers.get(${JSON.stringify(helperName)})?.call(null, ${dataVar}, { hash: ${hashName}, data: ${dataVar} });`;
+    
+    if (options.escape) {
+        return `
+{
+    if (helpers.has(${JSON.stringify(helperName)})) {
+        ${hashCode}
+        ${helperCode}
+        if (typeof ${varName} === 'string') {
+            result += escape(${varName});
+        } else if (${varName} != null) {
+            result += String(${varName});
+        }
+    }
+}
+`;
+    } else {
+        return `
+{
+    if (helpers.has(${JSON.stringify(helperName)})) {
+        ${hashCode}
+        ${helperCode}
+        if (${varName} != null) {
+            result += String(${varName});
+        }
+    }
+}
+`;
+    }
+}
+
+/**
+ * Parse helper arguments and hash options
+ */
+function parseHelperArguments(argsString: string): { args: string[], hash: Record<string, string> } {
+    const args: string[] = [];
+    const hash: Record<string, string> = {};
+    
+    // More sophisticated parsing that handles quoted strings
+    const tokens = tokenizeArguments(argsString.trim());
+    
+    for (const token of tokens) {
+        if (token.includes('=')) {
+            const eqIndex = token.indexOf('=');
+            const key = token.slice(0, eqIndex);
+            const value = token.slice(eqIndex + 1);
+            
+            // Keep quotes for processing in code generation
+            hash[key] = value;
+        } else {
+            args.push(token);
+        }
+    }
+    
+    return { args, hash };
+}
+
+/**
+ * Tokenize arguments respecting quoted strings
+ */
+function tokenizeArguments(input: string): string[] {
+    const tokens: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    let quoteChar = '';
+    
+    for (let i = 0; i < input.length; i++) {
+        const char = input[i];
+        
+        if (!inQuotes && (char === '"' || char === "'")) {
+            inQuotes = true;
+            quoteChar = char;
+            current += char;
+        } else if (inQuotes && char === quoteChar) {
+            inQuotes = false;
+            current += char;
+        } else if (!inQuotes && char === ' ') {
+            if (current.trim()) {
+                tokens.push(current.trim());
+                current = '';
+            }
+        } else {
+            current += char;
+        }
+    }
+    
+    if (current.trim()) {
+        tokens.push(current.trim());
+    }
+    
+    return tokens;
 }

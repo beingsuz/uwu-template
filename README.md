@@ -104,6 +104,28 @@ registerHelper("uppercase", (text) => {
 // Use in templates: {{uppercase name}}
 ```
 
+### Block Helpers with Options
+```js
+import { registerBlockHelper } from "./mod.ts";
+
+registerBlockHelper("withUser", (user, options) => {
+    if (user?.active) {
+        return options.fn(user);
+    } else {
+        return options.inverse();
+    }
+});
+
+// Use in templates:
+// {{#withUser currentUser}}
+//   Welcome {{name}}!
+// {{else}}
+//   Please log in
+// {{/withUser}}
+```
+
+📖 **[View detailed Block Helper documentation](./BLOCK_HELPERS.md)**
+
 ## 📊 Performance Benchmarks
 
 **🚀 Performance Summary:**
@@ -159,6 +181,8 @@ app.get("/", (req, res) => {
 | Loops | ✅ | `{{#each items}}...{{/each}}` |
 | Built-in Helpers | ✅ | `{{json data}}` |
 | Custom Helpers | ✅ | `registerHelper("name", fn)` |
+| Block Helpers | ✅ | `registerBlockHelper("name", fn)` |
+| Helper Options | ✅ | `{{helper value key="option"}}` |
 | HTML Escaping | ✅ | Automatic (use `{{raw}}` to disable) |
 
 ## 🤝 Contributing
