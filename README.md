@@ -194,6 +194,10 @@ app.get("/", (req, res) => {
 5. Push to the branch (`git push origin feature/amazing-feature`)
 6. Open a Pull Request
 
+## 🌟 Sponsor
+
+This project is proudly sponsored by [yatsu.net](https://yatsu.net)
+
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
