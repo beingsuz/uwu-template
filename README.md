@@ -117,6 +117,30 @@ const template = `
 `;
 ```
 
+### Raw Output
+For outputting literal template syntax without processing, use raw blocks:
+
+```handlebars
+{{{{raw}}}}
+  <h1>{{{body}}}</h1>
+  <p>This {{variable}} will not be processed</p>
+  {{#if condition}}{{value}}{{/if}}
+{{{{/raw}}}}
+```
+
+**Output:**
+```html
+<h1>{{{body}}}</h1>
+<p>This {{variable}} will not be processed</p>
+{{#if condition}}{{value}}{{/if}}
+```
+
+**Use Cases:**
+- Generating template examples in documentation
+- Outputting template syntax for client-side processing
+- Creating code examples that contain template syntax
+- Bypassing template processing for specific content blocks
+
 ## 🔧 Helper Functions
 
 ### Built-in Helpers
@@ -586,6 +610,16 @@ registerLayout("layoutName", `
 <!-- Layout with content -->
 {{> layoutName}}
 <p>This content goes into the layout</p>
+```
+
+#### Raw Output
+```handlebars
+<!-- Output literal template syntax -->
+{{{{raw}}}}
+  <h1>{{{body}}}</h1>
+  <p>This {{variable}} will not be processed</p>
+  {{#if condition}}{{value}}{{/if}}
+{{{{/raw}}}}
 ```
 
 ### Error Handling

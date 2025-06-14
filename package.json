@@ -7,7 +7,7 @@
   "types": "mod.ts",
   "scripts": {
     "test": "deno test -A",
-    "bench": "deno bench -A",
+    "bench": "deno bench -A --no-check",
     "build": "deno bundle mod.ts bundle.js",
     "check": "deno check mod.ts",
     "fmt": "deno fmt",

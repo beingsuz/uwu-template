@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Explore advanced caching strategies
 - Investigate streaming template support
 
+### ✨ New Features Added
+- **NEW**: Raw output blocks with `{{{{raw}}}}...{{{{/raw}}}}` syntax
+- **NEW**: Bypass template processing for literal output of template syntax
+- **NEW**: Support for outputting code examples and documentation
+
 ---
 
 ## [1.0.0-beta] - 2025-06-14

@@ -187,7 +187,7 @@ function processTemplate(template: string, options: CompilerOptions, dataVar: st
 }
 
 interface TemplateConstruct {
-    type: 'variable' | 'if' | 'each' | 'layout' | 'blockHelper' | 'helper' | 'component';
+    type: 'variable' | 'if' | 'each' | 'layout' | 'blockHelper' | 'helper' | 'component' | 'raw';
     start: number;
     end: number;
     variable?: string;
@@ -203,9 +203,28 @@ interface TemplateConstruct {
  */
 function findNextConstruct(template: string, startPos: number): TemplateConstruct | null {
     const remaining = template.slice(startPos);
-    
-    // Find all possible constructs and their positions
+      // Find all possible constructs and their positions
     const possibilities: Array<{construct: TemplateConstruct, priority: number}> = [];
+    
+    // Raw block {{{{raw}}}} ... {{{{/raw}}}} - highest priority to avoid processing
+    const rawMatch = remaining.match(/\{\{\{\{raw\}\}\}\}/);
+    if (rawMatch && rawMatch.index !== undefined) {
+        const blockStart = startPos + rawMatch.index;
+        const blockEnd = template.indexOf('{{{{/raw}}}}', blockStart);
+        if (blockEnd > blockStart) {
+            const contentStart = blockStart + rawMatch[0].length;
+            const contentEnd = blockEnd;
+            possibilities.push({
+                construct: {
+                    type: 'raw',
+                    start: blockStart,
+                    end: blockEnd + '{{{{/raw}}}}'.length,
+                    content: template.slice(contentStart, contentEnd)
+                },
+                priority: 0.5
+            });
+        }
+    }
       // Layout {{> name}} - highest priority (simplest)
     const layoutMatch = remaining.match(/\{\{>\s*([^}]+)\}\}/);
     if (layoutMatch && layoutMatch.index !== undefined) {
@@ -442,11 +461,12 @@ function generateConstructCode(construct: TemplateConstruct, options: CompilerOp
         case 'each':
             return generateEachCode(construct.variable!, construct.content!, options, dataVar);
         case 'blockHelper':
-            return generateBlockHelperCode(construct.variable!, construct.content!, construct.helperArgs || '', options, dataVar);
-        case 'helper':
+            return generateBlockHelperCode(construct.variable!, construct.content!, construct.helperArgs || '', options, dataVar);        case 'helper':
             return generateHelperCall(construct.variable!, construct.helperArgs || '', { escape: false }, dataVar);
         case 'component':
             return generateComponentCode(construct.variable!, construct.helperArgs || '', options, dataVar);
+        case 'raw':
+            return generateRawCode(construct.content!);
         case 'if':
             return generateIfCode(construct.condition!, construct.content!, construct.elseContent || '', construct.elseifConditions || [], options, dataVar);
         default:
@@ -982,4 +1002,13 @@ function tokenizeArguments(input: string): string[] {
     }
     
     return tokens;
+}
+
+/**
+ * Generate code for raw output (no template processing)
+ */
+function generateRawCode(content: string): string {
+    // Escape the content to prevent JavaScript injection and properly handle quotes
+    const escapedContent = JSON.stringify(content);
+    return `result += ${escapedContent};\n`;
 }
