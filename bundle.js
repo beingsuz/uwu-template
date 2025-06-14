@@ -1,741 +1,109 @@
-// src/engine.ts
-var ESCAPE_TABLE = new Array(256);
-ESCAPE_TABLE[38] = "&amp;";
-ESCAPE_TABLE[60] = "&lt;";
-ESCAPE_TABLE[62] = "&gt;";
-ESCAPE_TABLE[34] = "&quot;";
-ESCAPE_TABLE[39] = "&#39;";
-ESCAPE_TABLE[96] = "&#x60;";
-function escape(text) {
-  let result = "";
-  let lastIndex = 0;
-  for (let i = 0; i < text.length; i++) {
-    const char = text.charCodeAt(i);
-    const escaped = ESCAPE_TABLE[char];
-    if (escaped) {
-      result += text.slice(lastIndex, i) + escaped;
-      lastIndex = i + 1;
-    }
-  }
-  return lastIndex === 0 ? text : result + text.slice(lastIndex);
-}
-var layouts = /* @__PURE__ */ new Map();
-var layoutCache = /* @__PURE__ */ new Map();
-var compiledCache = /* @__PURE__ */ new Map();
-var helpers = /* @__PURE__ */ new Map();
-var blockHelpers = /* @__PURE__ */ new Map();
-var components = /* @__PURE__ */ new Map();
-var componentCache = /* @__PURE__ */ new Map();
-function registerLayout(name, content) {
-  layouts.set(name, content);
-  layoutCache.delete(name);
-}
-function registerComponent(name, template) {
-  components.set(name, template);
-  componentCache.delete(name);
-}
-function registerHelper(name, fn) {
-  helpers.set(name, fn);
-}
-function registerBlockHelper(name, fn) {
-  blockHelpers.set(name, fn);
-  helpers.set(name, fn);
-}
-function renderTemplate(_key, data, template) {
-  const compiled = compile(template);
-  return compiled(data);
-}
-function compile(template, options = {
-  escape: true
-}) {
-  const cacheKey = template + JSON.stringify(options);
-  if (compiledCache.has(cacheKey)) {
-    return compiledCache.get(cacheKey);
-  }
-  const functionBody = compileToJS(template, options);
-  const compiledFunction = new Function("data", "layouts", "layoutCache", "compileLayout", "escape", "helpers", "components", "componentCache", "compileComponent", functionBody);
-  const compileLayout = (name, options2) => {
-    if (layoutCache.has(name)) {
-      return layoutCache.get(name);
-    }
-    const layoutTemplate = layouts.get(name);
-    if (!layoutTemplate) return () => "";
-    const layoutFunction = compile(layoutTemplate, options2);
-    layoutCache.set(name, layoutFunction);
-    return layoutFunction;
-  };
-  const compileComponent = (name, options2) => {
-    if (componentCache.has(name)) {
-      return componentCache.get(name);
-    }
-    const componentTemplate = components.get(name);
-    if (!componentTemplate) return () => "";
-    const componentFunction = compile(componentTemplate, options2);
-    componentCache.set(name, componentFunction);
-    return componentFunction;
-  };
-  const boundFunction = (data) => compiledFunction(data, layouts, layoutCache, compileLayout, escape, helpers, components, componentCache, compileComponent);
-  compiledCache.set(cacheKey, boundFunction);
-  return boundFunction;
-}
-function compileToJS(template, options) {
-  let code = 'let result = "";\n';
-  code += processTemplate(template, options, "data");
-  code += "return result;\n";
-  return code;
-}
-function processTemplate(template, options, dataVar) {
-  let code = "";
-  let pos = 0;
-  while (pos < template.length) {
-    const nextConstruct = findNextConstruct(template, pos);
-    if (!nextConstruct) {
-      const remaining = template.slice(pos);
-      if (remaining) {
-        code += `result += ${JSON.stringify(remaining)};
-`;
-      }
-      break;
-    }
-    if (nextConstruct.start > pos) {
-      const staticContent = template.slice(pos, nextConstruct.start);
-      if (staticContent) {
-        code += `result += ${JSON.stringify(staticContent)};
-`;
-      }
-    }
-    code += generateConstructCode(nextConstruct, options, dataVar);
-    pos = nextConstruct.end;
-  }
-  return code;
-}
-function findNextConstruct(template, startPos) {
-  const remaining = template.slice(startPos);
-  const possibilities = [];
-  const rawMatch = remaining.match(/\{\{\{\{raw\}\}\}\}/);
-  if (rawMatch && rawMatch.index !== void 0) {
-    const blockStart = startPos + rawMatch.index;
-    const blockEnd = template.indexOf("{{{{/raw}}}}", blockStart);
-    if (blockEnd > blockStart) {
-      const contentStart = blockStart + rawMatch[0].length;
-      const contentEnd = blockEnd;
-      possibilities.push({
-        construct: {
-          type: "raw",
-          start: blockStart,
-          end: blockEnd + "{{{{/raw}}}}".length,
-          content: template.slice(contentStart, contentEnd)
-        },
-        priority: 0.5
-      });
-    }
-  }
-  const layoutMatch = remaining.match(/\{\{>\s*([^}]+)\}\}/);
-  if (layoutMatch && layoutMatch.index !== void 0) {
-    possibilities.push({
-      construct: {
-        type: "layout",
-        start: startPos + layoutMatch.index,
-        end: startPos + layoutMatch.index + layoutMatch[0].length,
-        variable: layoutMatch[1].trim()
-      },
-      priority: 1
-    });
-  }
-  const tripleMatch = remaining.match(/\{\{\{([^}]+)\}\}\}/);
-  if (tripleMatch && tripleMatch.index !== void 0) {
-    const content = tripleMatch[1].trim();
-    const spaceIndex = content.indexOf(" ");
-    if (spaceIndex > 0) {
-      const helperName = content.slice(0, spaceIndex);
-      const helperArgs = content.slice(spaceIndex + 1);
-      possibilities.push({
-        construct: {
-          type: "helper",
-          start: startPos + tripleMatch.index,
-          end: startPos + tripleMatch.index + tripleMatch[0].length,
-          variable: helperName,
-          helperArgs
-        },
-        priority: 1.5
-      });
-    } else {
-      possibilities.push({
-        construct: {
-          type: "helper",
-          start: startPos + tripleMatch.index,
-          end: startPos + tripleMatch.index + tripleMatch[0].length,
-          variable: content,
-          helperArgs: ""
-        },
-        priority: 1.5
-      });
-    }
-  }
-  const componentMatch = remaining.match(/\{\{component\s+([^}]+)\}\}/);
-  if (componentMatch && componentMatch.index !== void 0) {
-    const content = componentMatch[1].trim();
-    const spaceIndex = content.indexOf(" ");
-    if (spaceIndex > 0) {
-      const componentName = content.slice(0, spaceIndex);
-      const componentProps = content.slice(spaceIndex + 1);
-      possibilities.push({
-        construct: {
-          type: "component",
-          start: startPos + componentMatch.index,
-          end: startPos + componentMatch.index + componentMatch[0].length,
-          variable: componentName.replace(/['"]/g, ""),
-          helperArgs: componentProps
-        },
-        priority: 1.8
-      });
-    } else {
-      possibilities.push({
-        construct: {
-          type: "component",
-          start: startPos + componentMatch.index,
-          end: startPos + componentMatch.index + componentMatch[0].length,
-          variable: content.replace(/['"]/g, ""),
-          helperArgs: ""
-        },
-        priority: 1.8
-      });
-    }
-  }
-  const varMatch = remaining.match(/\{\{([^#/>!][^}]*)\}\}/);
-  if (varMatch && varMatch.index !== void 0) {
-    possibilities.push({
-      construct: {
-        type: "variable",
-        start: startPos + varMatch.index,
-        end: startPos + varMatch.index + varMatch[0].length,
-        variable: varMatch[1].trim()
-      },
-      priority: 2
-    });
-  }
-  const eachMatch = remaining.match(/\{\{#each\s+([^}]+)\}\}/);
-  if (eachMatch && eachMatch.index !== void 0) {
-    const blockStart = startPos + eachMatch.index;
-    const blockEnd = findMatchingBlockEnd(template, blockStart, "each");
-    if (blockEnd > blockStart) {
-      const contentStart = blockStart + eachMatch[0].length;
-      const contentEnd = blockEnd - "{{/each}}".length;
-      possibilities.push({
-        construct: {
-          type: "each",
-          start: blockStart,
-          end: blockEnd,
-          variable: eachMatch[1].trim(),
-          content: template.slice(contentStart, contentEnd)
-        },
-        priority: 3
-      });
-    }
-  }
-  const blockHelperMatch = remaining.match(/\{\{#(\w+)(?:\s+([^}]*))?\}\}/);
-  if (blockHelperMatch && blockHelperMatch.index !== void 0) {
-    const helperName = blockHelperMatch[1];
-    if (![
-      "if",
-      "each",
-      "elseif",
-      "else"
-    ].includes(helperName)) {
-      const blockStart = startPos + blockHelperMatch.index;
-      const blockEnd = findMatchingBlockEnd(template, blockStart, helperName);
-      if (blockEnd > blockStart) {
-        const contentStart = blockStart + blockHelperMatch[0].length;
-        const contentEnd = blockEnd - `{{/${helperName}}}`.length;
-        possibilities.push({
-          construct: {
-            type: "blockHelper",
-            start: blockStart,
-            end: blockEnd,
-            variable: helperName,
-            content: template.slice(contentStart, contentEnd),
-            helperArgs: blockHelperMatch[2]?.trim() || ""
-          },
-          priority: 3
-        });
-      }
-    }
-  }
-  const ifMatch = remaining.match(/\{\{#if\s+([^}]+)\}\}/);
-  if (ifMatch && ifMatch.index !== void 0) {
-    const blockStart = startPos + ifMatch.index;
-    const blockEnd = findMatchingBlockEnd(template, blockStart, "if");
-    if (blockEnd > blockStart) {
-      const contentStart = blockStart + ifMatch[0].length;
-      const contentEnd = blockEnd - "{{/if}}".length;
-      const fullContent = template.slice(contentStart, contentEnd);
-      const ifElseStructure = parseIfElseStructure(fullContent);
-      possibilities.push({
-        construct: {
-          type: "if",
-          start: blockStart,
-          end: blockEnd,
-          condition: ifMatch[1].trim(),
-          content: ifElseStructure.ifContent,
-          elseContent: ifElseStructure.elseContent,
-          elseifConditions: ifElseStructure.elseifConditions
-        },
-        priority: 4
-      });
-    }
-  }
-  if (possibilities.length === 0) return null;
-  possibilities.sort((a, b) => {
-    if (a.construct.start !== b.construct.start) {
-      return a.construct.start - b.construct.start;
-    }
-    return a.priority - b.priority;
-  });
-  return possibilities[0].construct;
-}
-function findMatchingBlockEnd(template, blockStart, blockType) {
-  const openPattern = new RegExp(`\\{\\{#${blockType}\\b[^}]*\\}\\}`, "g");
-  const closePattern = new RegExp(`\\{\\{\\/${blockType}\\}\\}`, "g");
-  let depth = 0;
-  let pos = blockStart;
-  openPattern.lastIndex = pos;
-  const openMatch = openPattern.exec(template);
-  if (openMatch && openMatch.index === pos) {
-    pos = openMatch.index + openMatch[0].length;
-    depth = 1;
-  }
-  while (depth > 0 && pos < template.length) {
-    openPattern.lastIndex = pos;
-    closePattern.lastIndex = pos;
-    const nextOpen = openPattern.exec(template);
-    const nextClose = closePattern.exec(template);
-    if (!nextClose) break;
-    if (nextOpen && nextOpen.index < nextClose.index) {
-      depth++;
-      pos = nextOpen.index + nextOpen[0].length;
-    } else {
-      depth--;
-      pos = nextClose.index + nextClose[0].length;
-      if (depth === 0) {
-        return pos;
-      }
-    }
-  }
-  return template.length;
-}
-function generateConstructCode(construct, options, dataVar) {
-  switch (construct.type) {
-    case "variable":
-      return generateVariableCode(construct.variable, options, dataVar);
-    case "layout":
-      return generateLayoutCode(construct.variable, options, dataVar);
-    case "each":
-      return generateEachCode(construct.variable, construct.content, options, dataVar);
-    case "blockHelper":
-      return generateBlockHelperCode(construct.variable, construct.content, construct.helperArgs || "", options, dataVar);
-    case "helper":
-      return generateHelperCall(construct.variable, construct.helperArgs || "", {
-        escape: false
-      }, dataVar);
-    case "component":
-      return generateComponentCode(construct.variable, construct.helperArgs || "", options, dataVar);
-    case "raw":
-      return generateRawCode(construct.content);
-    case "if":
-      return generateIfCode(construct.condition, construct.content, construct.elseContent || "", construct.elseifConditions || [], options, dataVar);
-    default:
-      return "";
-  }
-}
-function generateVariableCode(variable, options, dataVar) {
-  const helperMatch = variable.match(/^(\w+)\s+(.+)$/);
-  if (helperMatch) {
-    const [, helperName, helperArgs] = helperMatch;
-    return generateHelperCall(helperName, helperArgs, options, dataVar);
-  }
-  const accessor = generateDataAccessor(variable, dataVar);
-  const varName = `val_${Math.random().toString(36).substr(2, 9)}`;
-  if (options.escape) {
-    return `
+var C=new Array(256);C[38]="&amp;";C[60]="&lt;";C[62]="&gt;";C[34]="&quot;";C[39]="&#39;";C[96]="&#x60;";function E(e){let t="",n=0;for(let s=0;s<e.length;s++){let o=e.charCodeAt(s),i=C[o];i&&(t+=e.slice(n,s)+i,n=s+1)}return n===0?e:t+e.slice(n)}var M=new Map,S=new Map,A=new Map,_=new Map,v=new Map,J=new Map,b=new Map;function z(e,t){M.set(e,t),S.delete(e)}function Z(e,t){J.set(e,t),b.delete(e)}function H(e,t){_.set(e,t)}function I(e,t){v.set(e,t),_.set(e,t)}function B(e,t,n){return O(n)(t)}function O(e,t={escape:!0}){let n=e+JSON.stringify(t);if(A.has(n))return A.get(n);let s=R(e,t),o=new Function("data","layouts","layoutCache","compileLayout","escape","helpers","components","componentCache","compileComponent",s),i=(l,f)=>{if(S.has(l))return S.get(l);let d=M.get(l);if(!d)return()=>"";let a=O(d,f);return S.set(l,a),a},r=(l,f)=>{if(b.has(l))return b.get(l);let d=J.get(l);if(!d)return()=>"";let a=O(d,f);return b.set(l,a),a},c=l=>o(l,M,S,i,E,_,J,b,r);return A.set(n,c),c}function R(e,t){let n=`let result = "";
+`;return n+=m(e,t,"data"),n+=`return result;
+`,n}function m(e,t,n){let s="",o=0;for(;o<e.length;){let i=F(e,o);if(!i){let r=e.slice(o);r&&(s+=`result += ${JSON.stringify(r)};
+`);break}if(i.start>o){let r=e.slice(o,i.start);r&&(s+=`result += ${JSON.stringify(r)};
+`)}s+=L(i,t,n),o=i.end}return s}function F(e,t){let n=e.slice(t),s=[],o=n.match(/\{\{\{\{raw\}\}\}\}/);if(o&&o.index!==void 0){let u=t+o.index,h=e.indexOf("{{{{/raw}}}}",u);if(h>u){let g=u+o[0].length,p=h;s.push({construct:{type:"raw",start:u,end:h+12,content:e.slice(g,p)},priority:.5})}}let i=n.match(/\{\{>\s*([^}]+)\}\}/);i&&i.index!==void 0&&s.push({construct:{type:"layout",start:t+i.index,end:t+i.index+i[0].length,variable:i[1].trim()},priority:1});let r=n.match(/\{\{\{([^}]+)\}\}\}/);if(r&&r.index!==void 0){let u=r[1].trim(),h=u.indexOf(" ");if(h>0){let g=u.slice(0,h),p=u.slice(h+1);s.push({construct:{type:"helper",start:t+r.index,end:t+r.index+r[0].length,variable:g,helperArgs:p},priority:1.5})}else s.push({construct:{type:"helper",start:t+r.index,end:t+r.index+r[0].length,variable:u,helperArgs:""},priority:1.5})}let c=n.match(/\{\{component\s+([^}]+)\}\}/);if(c&&c.index!==void 0){let u=c[1].trim(),h=u.indexOf(" ");if(h>0){let g=u.slice(0,h),p=u.slice(h+1);s.push({construct:{type:"component",start:t+c.index,end:t+c.index+c[0].length,variable:g.replace(/['"]/g,""),helperArgs:p},priority:1.8})}else s.push({construct:{type:"component",start:t+c.index,end:t+c.index+c[0].length,variable:u.replace(/['"]/g,""),helperArgs:""},priority:1.8})}let l=n.match(/\{\{([^#/>!][^}]*)\}\}/);l&&l.index!==void 0&&s.push({construct:{type:"variable",start:t+l.index,end:t+l.index+l[0].length,variable:l[1].trim()},priority:2});let f=n.match(/\{\{#each\s+([^}]+)\}\}/);if(f&&f.index!==void 0){let u=t+f.index,h=N(e,u,"each");if(h>u){let g=u+f[0].length,p=h-9;s.push({construct:{type:"each",start:u,end:h,variable:f[1].trim(),content:e.slice(g,p)},priority:3})}}let d=n.match(/\{\{#(\w+)(?:\s+([^}]*))?\}\}/);if(d&&d.index!==void 0){let u=d[1];if(!["if","each","elseif","else"].includes(u)){let h=t+d.index,g=N(e,h,u);if(g>h){let p=h+d[0].length,$=g-`{{/${u}}}`.length;s.push({construct:{type:"blockHelper",start:h,end:g,variable:u,content:e.slice(p,$),helperArgs:d[2]?.trim()||""},priority:3})}}}let a=n.match(/\{\{#if\s+([^}]+)\}\}/);if(a&&a.index!==void 0){let u=t+a.index,h=N(e,u,"if");if(h>u){let g=u+a[0].length,p=h-7,$=e.slice(g,p),y=U($);s.push({construct:{type:"if",start:u,end:h,condition:a[1].trim(),content:y.ifContent,elseContent:y.elseContent,elseifConditions:y.elseifConditions},priority:4})}}return s.length===0?null:(s.sort((u,h)=>u.construct.start!==h.construct.start?u.construct.start-h.construct.start:u.priority-h.priority),s[0].construct)}function N(e,t,n){let s=new RegExp(`\\{\\{#${n}\\b[^}]*\\}\\}`,"g"),o=new RegExp(`\\{\\{\\/${n}\\}\\}`,"g"),i=0,r=t;s.lastIndex=r;let c=s.exec(e);for(c&&c.index===r&&(r=c.index+c[0].length,i=1);i>0&&r<e.length;){s.lastIndex=r,o.lastIndex=r;let l=s.exec(e),f=o.exec(e);if(!f)break;if(l&&l.index<f.index)i++,r=l.index+l[0].length;else if(i--,r=f.index+f[0].length,i===0)return r}return e.length}function L(e,t,n){switch(e.type){case"variable":return j(e.variable,t,n);case"layout":return T(e.variable,t,n);case"each":return q(e.variable,e.content,t,n);case"blockHelper":return K(e.variable,e.content,e.helperArgs||"",t,n);case"helper":return W(e.variable,e.helperArgs||"",{escape:!1},n);case"component":return D(e.variable,e.helperArgs||"",t,n);case"raw":return P(e.content);case"if":return Q(e.condition,e.content,e.elseContent||"",e.elseifConditions||[],t,n);default:return""}}function j(e,t,n){let s=e.match(/^(\w+)\s+(.+)$/);if(s){let[,r,c]=s;return W(r,c,t,n)}let o=x(e,n),i=`val_${Math.random().toString(36).substr(2,9)}`;return t.escape?`
 {
-    let ${varName} = ${accessor};
-    if (typeof ${varName} === 'string') {
-        result += escape(${varName});
-    } else if (${varName} != null) {
-        result += String(${varName});
+    let ${i} = ${o};
+    if (typeof ${i} === 'string') {
+        result += escape(${i});
+    } else if (${i} != null) {
+        result += String(${i});
     }
 }
-`;
-  } else {
-    return `
+`:`
 {
-    let ${varName} = ${accessor};
-    if (${varName} != null) {
-        result += String(${varName});
+    let ${i} = ${o};
+    if (${i} != null) {
+        result += String(${i});
     }
 }
-`;
-  }
-}
-function generateLayoutCode(layoutName, options, dataVar) {
-  return `
+`}function T(e,t,n){return`
 {
-    if (layouts.has(${JSON.stringify(layoutName)})) {
-        const layoutFunction = compileLayout(${JSON.stringify(layoutName)}, ${JSON.stringify(options)});
-        result += layoutFunction(${dataVar});
+    if (layouts.has(${JSON.stringify(e)})) {
+        const layoutFunction = compileLayout(${JSON.stringify(e)}, ${JSON.stringify(t)});
+        result += layoutFunction(${n});
     }
 }
-`;
-}
-function generateComponentCode(componentName, propsString, options, dataVar) {
-  const varName = `component_${Math.random().toString(36).substr(2, 9)}`;
-  const propsVar = `props_${Math.random().toString(36).substr(2, 9)}`;
-  const { args, hash } = parseHelperArguments(propsString);
-  const propsEntries = [];
-  args.forEach((arg, index) => {
-    if (arg.startsWith('"') && arg.endsWith('"') || arg.startsWith("'") && arg.endsWith("'")) {
-      propsEntries.push(`${JSON.stringify(index.toString())}: ${arg}`);
-    } else {
-      propsEntries.push(`${JSON.stringify(index.toString())}: ${generateDataAccessor(arg, dataVar)}`);
-    }
-  });
-  Object.entries(hash).forEach(([key, value]) => {
-    if (value.startsWith('"') && value.endsWith('"') || value.startsWith("'") && value.endsWith("'")) {
-      propsEntries.push(`${JSON.stringify(key)}: ${JSON.stringify(value.slice(1, -1))}`);
-    } else {
-      propsEntries.push(`${JSON.stringify(key)}: ${generateDataAccessor(value, dataVar)}`);
-    }
-  });
-  const propsCode = propsEntries.length > 0 ? `const ${propsVar} = {${propsEntries.join(", ")}, '@parent': ${dataVar}};` : `const ${propsVar} = {'@parent': ${dataVar}};`;
-  return `
+`}function D(e,t,n,s){let o=`component_${Math.random().toString(36).substr(2,9)}`,i=`props_${Math.random().toString(36).substr(2,9)}`,{args:r,hash:c}=w(t),l=[];r.forEach((d,a)=>{d.startsWith('"')&&d.endsWith('"')||d.startsWith("'")&&d.endsWith("'")?l.push(`${JSON.stringify(a.toString())}: ${d}`):l.push(`${JSON.stringify(a.toString())}: ${x(d,s)}`)}),Object.entries(c).forEach(([d,a])=>{a.startsWith('"')&&a.endsWith('"')||a.startsWith("'")&&a.endsWith("'")?l.push(`${JSON.stringify(d)}: ${JSON.stringify(a.slice(1,-1))}`):l.push(`${JSON.stringify(d)}: ${x(a,s)}`)});let f=l.length>0?`const ${i} = {${l.join(", ")}, '@parent': ${s}};`:`const ${i} = {'@parent': ${s}};`;return`
 {
-    if (components.has(${JSON.stringify(componentName)})) {
-        ${propsCode}
-        const ${varName} = compileComponent(${JSON.stringify(componentName)}, ${JSON.stringify(options)});
-        result += ${varName}(${propsVar});
+    if (components.has(${JSON.stringify(e)})) {
+        ${f}
+        const ${o} = compileComponent(${JSON.stringify(e)}, ${JSON.stringify(n)});
+        result += ${o}(${i});
     }
 }
-`;
-}
-function generateEachCode(variable, content, options, dataVar) {
-  const accessor = generateDataAccessor(variable, dataVar);
-  const itemVar = `item_${Math.random().toString(36).substr(2, 9)}`;
-  const indexVar = `index_${Math.random().toString(36).substr(2, 9)}`;
-  const innerCode = processTemplate(content, options, itemVar);
-  return `
+`}function q(e,t,n,s){let o=x(e,s),i=`item_${Math.random().toString(36).substr(2,9)}`,r=`index_${Math.random().toString(36).substr(2,9)}`,c=m(t,n,i);return`
 {
-    const arr = ${accessor};
+    const arr = ${o};
     if (Array.isArray(arr)) {
-        for (let ${indexVar} = 0; ${indexVar} < arr.length; ${indexVar}++) {
-            const ${itemVar} = arr[${indexVar}];
-            ${innerCode}
+        for (let ${r} = 0; ${r} < arr.length; ${r}++) {
+            const ${i} = arr[${r}];
+            ${c}
         }
     }
 }
-`;
-}
-function generateBlockHelperCode(helperName, content, helperArgs, options, dataVar) {
-  const { args, hash } = parseHelperArguments(helperArgs);
-  const fnName = `fn_${Math.random().toString(36).substr(2, 9)}`;
-  const inverseName = `inverse_${Math.random().toString(36).substr(2, 9)}`;
-  const hashName = `hash_${Math.random().toString(36).substr(2, 9)}`;
-  const resultName = `result_${Math.random().toString(36).substr(2, 9)}`;
-  const blockStructure = parseBlockHelperStructure(content);
-  const hashCode = Object.entries(hash).length > 0 ? `const ${hashName} = {${Object.entries(hash).map(([key, value]) => {
-    if (value.startsWith('"') && value.endsWith('"') || value.startsWith("'") && value.endsWith("'")) {
-      return `${JSON.stringify(key)}: ${JSON.stringify(value.slice(1, -1))}`;
-    } else {
-      return `${JSON.stringify(key)}: ${generateDataAccessor(value, dataVar)}`;
-    }
-  }).join(", ")}};` : `const ${hashName} = {};`;
-  const fnCode = `
-        const ${fnName} = (context) => {
-            const childData = context || ${dataVar};
+`}function K(e,t,n,s,o){let{args:i,hash:r}=w(n),c=`fn_${Math.random().toString(36).substr(2,9)}`,l=`inverse_${Math.random().toString(36).substr(2,9)}`,f=`hash_${Math.random().toString(36).substr(2,9)}`,d=`result_${Math.random().toString(36).substr(2,9)}`,a=X(t),u=Object.entries(r).length>0?`const ${f} = {${Object.entries(r).map(([$,y])=>y.startsWith('"')&&y.endsWith('"')||y.startsWith("'")&&y.endsWith("'")?`${JSON.stringify($)}: ${JSON.stringify(y.slice(1,-1))}`:`${JSON.stringify($)}: ${x(y,o)}`).join(", ")}};`:`const ${f} = {};`,h=`
+        const ${c} = (context) => {
+            const childData = context || ${o};
             let childResult = '';
-            ${processTemplate(blockStructure.mainContent, options, "childData").replace(/result \+=/g, "childResult +=")}
+            ${m(a.mainContent,s,"childData").replace(/result \+=/g,"childResult +=")}
             return childResult;
         };
-    `;
-  const inverseCode = `
-        const ${inverseName} = (context) => {
-            const childData = context || ${dataVar};
+    `,g=`
+        const ${l} = (context) => {
+            const childData = context || ${o};
             let childResult = '';
-            ${processTemplate(blockStructure.elseContent, options, "childData").replace(/result \+=/g, "childResult +=")}
+            ${m(a.elseContent,s,"childData").replace(/result \+=/g,"childResult +=")}
             return childResult;
         };
-    `;
-  let contextArg = dataVar;
-  if (args.length > 0) {
-    const firstArg = args[0];
-    if (firstArg.startsWith('"') && firstArg.endsWith('"') || firstArg.startsWith("'") && firstArg.endsWith("'")) {
-      contextArg = JSON.stringify(firstArg.slice(1, -1));
-    } else if (firstArg === "true") {
-      contextArg = "true";
-    } else if (firstArg === "false") {
-      contextArg = "false";
-    } else if (/^\d+$/.test(firstArg)) {
-      contextArg = firstArg;
-    } else {
-      contextArg = generateDataAccessor(firstArg, dataVar);
-    }
-  }
-  return `
+    `,p=o;if(i.length>0){let $=i[0];$.startsWith('"')&&$.endsWith('"')||$.startsWith("'")&&$.endsWith("'")?p=JSON.stringify($.slice(1,-1)):$==="true"?p="true":$==="false"?p="false":/^\d+$/.test($)?p=$:p=x($,o)}return`
 {
-    if (helpers.has(${JSON.stringify(helperName)})) {
-        ${hashCode}
-        ${fnCode}
-        ${inverseCode}
+    if (helpers.has(${JSON.stringify(e)})) {
+        ${u}
+        ${h}
+        ${g}
         const helperOptions = {
-            fn: ${fnName},
-            inverse: ${inverseName},
-            hash: ${hashName},
-            data: ${dataVar}
+            fn: ${c},
+            inverse: ${l},
+            hash: ${f},
+            data: ${o}
         };
-        const ${resultName} = helpers.get(${JSON.stringify(helperName)})?.call(null, ${contextArg}, helperOptions);
-        if (${resultName} != null) {
-            result += String(${resultName});
+        const ${d} = helpers.get(${JSON.stringify(e)})?.call(null, ${p}, helperOptions);
+        if (${d} != null) {
+            result += String(${d});
         }
     }
 }
-`;
-}
-function generateIfCode(condition, content, elseContent, elseifConditions, options, dataVar) {
-  const conditionCode = generateConditionCode(condition, dataVar);
-  const ifCode = processTemplate(content, options, dataVar);
-  let code = `
+`}function Q(e,t,n,s,o,i){let r=k(e,i),c=m(t,o,i),l=`
 {
-    if (${conditionCode}) {
-        ${ifCode}`;
-  for (const elseif of elseifConditions) {
-    const elseifConditionCode = generateConditionCode(elseif.condition, dataVar);
-    const elseifCode = processTemplate(elseif.content, options, dataVar);
-    code += `
-    } else if (${elseifConditionCode}) {
-        ${elseifCode}`;
-  }
-  if (elseContent) {
-    const elseCode = processTemplate(elseContent, options, dataVar);
-    code += `
+    if (${r}) {
+        ${c}`;for(let f of s){let d=k(f.condition,i),a=m(f.content,o,i);l+=`
+    } else if (${d}) {
+        ${a}`}if(n){let f=m(n,o,i);l+=`
     } else {
-        ${elseCode}`;
-  }
-  code += `
+        ${f}`}return l+=`
     }
 }
-`;
-  return code;
-}
-function generateDataAccessor(path, dataVar) {
-  if (path === "this") {
-    return dataVar;
-  }
-  if (path.startsWith("@parent")) {
-    if (path === "@parent") {
-      return `${dataVar}?.['@parent']`;
-    } else {
-      const subPath = path.slice(8);
-      return `${dataVar}?.['@parent']${generateSubPath(subPath)}`;
-    }
-  }
-  if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(path)) {
-    return `${dataVar}?.${path}`;
-  }
-  const parts = path.split(".");
-  let accessor = dataVar;
-  for (const part of parts) {
-    if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(part)) {
-      accessor += `?.${part}`;
-    } else {
-      accessor += `?.[${JSON.stringify(part)}]`;
-    }
-  }
-  return accessor;
-}
-function generateSubPath(path) {
-  const parts = path.split(".");
-  let accessor = "";
-  for (const part of parts) {
-    if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(part)) {
-      accessor += `?.${part}`;
-    } else {
-      accessor += `?.[${JSON.stringify(part)}]`;
-    }
-  }
-  return accessor;
-}
-function generateConditionCode(condition, dataVar) {
-  let code = condition.trim();
-  code = code.replace(/(@parent(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*|[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)+|[a-zA-Z_][a-zA-Z0-9_]*)\b/g, (match) => {
-    if ([
-      "true",
-      "false",
-      "null",
-      "undefined",
-      "typeof",
-      "instanceof"
-    ].includes(match)) {
-      return match;
-    }
-    if (/^\d+$/.test(match)) {
-      return match;
-    }
-    if (match.includes("?.") || match.includes("[")) {
-      return match;
-    }
-    return generateDataAccessor(match, dataVar);
-  });
-  return `!!(${code})`;
-}
-function parseIfElseStructure(content) {
-  const elseifConditions = [];
-  let ifContent = content;
-  let elseContent = "";
-  const elseifPattern = /\{\{#elseif\s+([^}]+)\}\}/g;
-  const elsePattern = /\{\{#else\}\}/;
-  const elseifMatches = [];
-  let match;
-  while ((match = elseifPattern.exec(content)) !== null) {
-    elseifMatches.push({
-      condition: match[1].trim(),
-      index: match.index,
-      length: match[0].length
-    });
-  }
-  const elseMatch = content.match(elsePattern);
-  const elseIndex = elseMatch ? elseMatch.index : -1;
-  if (elseifMatches.length > 0 || elseIndex >= 0) {
-    const firstBoundary = elseifMatches.length > 0 ? elseifMatches[0].index : elseIndex;
-    if (firstBoundary >= 0) {
-      ifContent = content.slice(0, firstBoundary).trim();
-    }
-    for (let i = 0; i < elseifMatches.length; i++) {
-      const elseifMatch = elseifMatches[i];
-      const nextBoundary = i + 1 < elseifMatches.length ? elseifMatches[i + 1].index : elseIndex >= 0 ? elseIndex : content.length;
-      const elseifContent = content.slice(elseifMatch.index + elseifMatch.length, nextBoundary).trim();
-      elseifConditions.push({
-        condition: elseifMatch.condition,
-        content: elseifContent
-      });
-    }
-    if (elseIndex >= 0) {
-      elseContent = content.slice(elseIndex + elseMatch[0].length).trim();
-    }
-  }
-  return {
-    ifContent,
-    elseifConditions,
-    elseContent
-  };
-}
-function parseBlockHelperStructure(content) {
-  const elsePattern = /\{\{else\}\}/;
-  const elseMatch = content.match(elsePattern);
-  if (elseMatch && elseMatch.index !== void 0) {
-    const mainContent = content.slice(0, elseMatch.index).trim();
-    const elseContent = content.slice(elseMatch.index + elseMatch[0].length).trim();
-    return {
-      mainContent,
-      elseContent
-    };
-  }
-  return {
-    mainContent: content,
-    elseContent: ""
-  };
-}
-function generateHelperCall(helperName, helperArgs, options, dataVar) {
-  const { args } = parseHelperArguments(helperArgs);
-  const varName = `helper_${Math.random().toString(36).substr(2, 9)}`;
-  const helperCode = args.length > 0 ? `const ${varName} = helpers.get(${JSON.stringify(helperName)})?.call(null, ${args.map((arg) => {
-    if (arg.startsWith('"') && arg.endsWith('"') || arg.startsWith("'") && arg.endsWith("'")) {
-      return arg;
-    } else {
-      return generateDataAccessor(arg, dataVar);
-    }
-  }).join(", ")});` : `const ${varName} = helpers.get(${JSON.stringify(helperName)})?.call(null);`;
-  if (options.escape) {
-    return `
+`,l}function x(e,t){if(e==="this")return t;if(e.startsWith("@parent")){if(e==="@parent")return`${t}?.['@parent']`;{let o=e.slice(8);return`${t}?.['@parent']${G(o)}`}}if(/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(e))return`${t}?.${e}`;let n=e.split("."),s=t;for(let o of n)/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(o)?s+=`?.${o}`:s+=`?.[${JSON.stringify(o)}]`;return s}function G(e){let t=e.split("."),n="";for(let s of t)/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(s)?n+=`?.${s}`:n+=`?.[${JSON.stringify(s)}]`;return n}function k(e,t){let n=e.trim();return n=n.replace(/(@parent(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*|[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)+|[a-zA-Z_][a-zA-Z0-9_]*)\b/g,s=>["true","false","null","undefined","typeof","instanceof"].includes(s)||/^\d+$/.test(s)||s.includes("?.")||s.includes("[")?s:x(s,t)),`!!(${n})`}function U(e){let t=[],n=e,s="",o=/\{\{#elseif\s+([^}]+)\}\}/g,i=/\{\{#else\}\}/,r=[],c;for(;(c=o.exec(e))!==null;)r.push({condition:c[1].trim(),index:c.index,length:c[0].length});let l=e.match(i),f=l?l.index:-1;if(r.length>0||f>=0){let d=r.length>0?r[0].index:f;d>=0&&(n=e.slice(0,d).trim());for(let a=0;a<r.length;a++){let u=r[a],h=a+1<r.length?r[a+1].index:f>=0?f:e.length,g=e.slice(u.index+u.length,h).trim();t.push({condition:u.condition,content:g})}f>=0&&(s=e.slice(f+l[0].length).trim())}return{ifContent:n,elseifConditions:t,elseContent:s}}function X(e){let t=/\{\{else\}\}/,n=e.match(t);if(n&&n.index!==void 0){let s=e.slice(0,n.index).trim(),o=e.slice(n.index+n[0].length).trim();return{mainContent:s,elseContent:o}}return{mainContent:e,elseContent:""}}function W(e,t,n,s){let{args:o}=w(t),i=`helper_${Math.random().toString(36).substr(2,9)}`,r=o.length>0?`const ${i} = helpers.get(${JSON.stringify(e)})?.call(null, ${o.map(c=>c.startsWith('"')&&c.endsWith('"')||c.startsWith("'")&&c.endsWith("'")?c:x(c,s)).join(", ")});`:`const ${i} = helpers.get(${JSON.stringify(e)})?.call(null);`;return n.escape?`
 {
-    if (helpers.has(${JSON.stringify(helperName)})) {
-        ${helperCode}
-        if (typeof ${varName} === 'string') {
-            result += escape(${varName});
-        } else if (${varName} != null) {
-            result += String(${varName});
+    if (helpers.has(${JSON.stringify(e)})) {
+        ${r}
+        if (typeof ${i} === 'string') {
+            result += escape(${i});
+        } else if (${i} != null) {
+            result += String(${i});
         }
     }
 }
-`;
-  } else {
-    return `
+`:`
 {
-    if (helpers.has(${JSON.stringify(helperName)})) {
-        ${helperCode}
-        if (${varName} != null) {
-            result += String(${varName});
+    if (helpers.has(${JSON.stringify(e)})) {
+        ${r}
+        if (${i} != null) {
+            result += String(${i});
         }
     }
 }
-`;
-  }
-}
-function parseHelperArguments(argsString) {
-  const args = [];
-  const hash = {};
-  const tokens = tokenizeArguments(argsString.trim());
-  for (const token of tokens) {
-    if (token.includes("=")) {
-      const eqIndex = token.indexOf("=");
-      const key = token.slice(0, eqIndex);
-      const value = token.slice(eqIndex + 1);
-      hash[key] = value;
-    } else {
-      args.push(token);
-    }
-  }
-  return {
-    args,
-    hash
-  };
-}
-function tokenizeArguments(input) {
-  const tokens = [];
-  let current = "";
-  let inQuotes = false;
-  let quoteChar = "";
-  for (let i = 0; i < input.length; i++) {
-    const char = input[i];
-    if (!inQuotes && (char === '"' || char === "'")) {
-      inQuotes = true;
-      quoteChar = char;
-      current += char;
-    } else if (inQuotes && char === quoteChar) {
-      inQuotes = false;
-      current += char;
-    } else if (!inQuotes && char === " ") {
-      if (current.trim()) {
-        tokens.push(current.trim());
-        current = "";
-      }
-    } else {
-      current += char;
-    }
-  }
-  if (current.trim()) {
-    tokens.push(current.trim());
-  }
-  return tokens;
-}
-function generateRawCode(content) {
-  const escapedContent = JSON.stringify(content);
-  return `result += ${escapedContent};
-`;
-}
-export {
-  compile,
-  registerBlockHelper,
-  registerComponent,
-  registerHelper,
-  registerLayout,
-  renderTemplate
-};
+`}function w(e){let t=[],n={},s=Y(e.trim());for(let o of s)if(o.includes("=")){let i=o.indexOf("="),r=o.slice(0,i),c=o.slice(i+1);n[r]=c}else t.push(o);return{args:t,hash:n}}function Y(e){let t=[],n="",s=!1,o="";for(let i=0;i<e.length;i++){let r=e[i];!s&&(r==='"'||r==="'")?(s=!0,o=r,n+=r):s&&r===o?(s=!1,n+=r):!s&&r===" "?n.trim()&&(t.push(n.trim()),n=""):n+=r}return n.trim()&&t.push(n.trim()),t}function P(e){return`result += ${JSON.stringify(e)};
+`}export{O as compile,I as registerBlockHelper,Z as registerComponent,H as registerHelper,z as registerLayout,B as renderTemplate};
