@@ -1,0 +1,57 @@
+{
+  "name": "uwu-template",
+  "version": "1.0.0-beta",
+  "description": "A blazingly fast, feature-rich template engine for Deno and JavaScript with advanced component system, helper functions, and performance that rivals native template literals.",
+  "main": "bundle.js",
+  "module": "mod.ts",
+  "types": "mod.ts",
+  "scripts": {
+    "test": "deno test -A",
+    "bench": "deno bench -A",
+    "build": "deno bundle mod.ts bundle.js",
+    "check": "deno check mod.ts",
+    "fmt": "deno fmt",
+    "lint": "deno lint"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/beingsuz/uwu-template.git"
+  },
+  "keywords": [
+    "template",
+    "template-engine",
+    "handlebars",
+    "mustache",
+    "performance",
+    "fast",
+    "deno",
+    "typescript",
+    "components",
+    "helpers",
+    "uwu"
+  ],
+  "author": "Aiko Suzuki",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/beingsuz/uwu-template/issues"
+  },
+  "homepage": "https://github.com/beingsuz/uwu-template#readme",
+  "files": [
+    "bundle.js",
+    "mod.ts",
+    "src/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "exports": {
+    ".": {
+      "import": "./bundle.js",
+      "require": "./bundle.js",
+      "types": "./mod.ts"
+    }
+  }
+}

@@ -1,0 +1,32 @@
+# Development files
+*.test.ts
+test-*.ts
+debug-*.ts
+bench/
+templates/
+example.ts
+generate.ts
+
+# Deno specific
+deno.json
+deno.lock
+
+# Documentation (except what's in files array)
+BENCHMARK_RESULTS.md
+BLOCK_HELPERS.md
+RELEASE_NOTES.md
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+*.swp
+*.swo
+
+# Node modules (if any)
+node_modules/
+
+# Logs
+*.log
