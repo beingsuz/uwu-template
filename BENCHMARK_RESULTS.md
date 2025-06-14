@@ -90,13 +90,5 @@ The slight compilation overhead compared to Handlebars is more than offset by th
 
 ## Running the Benchmark
 ```bash
-# Easy way using deno task
-deno task bench-comprehensive
-
-# Or manually from project root
-deno bench bench/profmance.bench.ts -A
-
-# Or from bench directory
-cd bench
-deno bench -A
+deno task bench
 ```

@@ -831,6 +831,10 @@ deno fmt --check
 deno lint
 ```
 
+## 🌟 Sponsor
+
+This project is proudly sponsored by [yatsu.net](https://yatsu.net)
+
 ## 📄 License
 
 MIT License - see the [LICENSE](LICENSE) file for details.
