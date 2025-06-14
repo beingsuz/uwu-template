@@ -7,7 +7,7 @@ export interface CompilerOptions {
 
 // Define helper types
 export interface HelperFunction {
-    (value: unknown, options?: HelperOptions): string;
+    (...args: unknown[]): string;
 }
 
 export interface BlockHelperFunction {
@@ -60,11 +60,20 @@ const compiledCache = new Map<string, (data: unknown) => string>();
 const helpers = new Map<string, HelperFunction | BlockHelperFunction>();
 // Store block helpers specifically
 const blockHelpers = new Map<string, BlockHelperFunction>();
+// Store components
+const components = new Map<string, string>();
+const componentCache = new Map<string, (data: unknown) => string>();
 
 export function registerLayout(name: string, content: string) {
     layouts.set(name, content);
     // Clear any cached compiled version
     layoutCache.delete(name);
+}
+
+export function registerComponent(name: string, template: string) {
+    components.set(name, template);
+    // Clear any cached compiled version
+    componentCache.delete(name);
 }
 
 export function registerHelper(name: string, fn: HelperFunction | BlockHelperFunction) {
@@ -96,9 +105,8 @@ export function compile(template: string, options: CompilerOptions = { escape: t
 
     // Generate the JavaScript function body
     const functionBody = compileToJS(template, options);
-    
-    // Create the optimized function
-    const compiledFunction = new Function('data', 'layouts', 'layoutCache', 'compileLayout', 'escape', 'helpers', functionBody);
+      // Create the optimized function
+    const compiledFunction = new Function('data', 'layouts', 'layoutCache', 'compileLayout', 'escape', 'helpers', 'components', 'componentCache', 'compileComponent', functionBody);
     
     // Helper function to compile layouts on demand
     const compileLayout = (name: string, options: CompilerOptions) => {
@@ -108,12 +116,24 @@ export function compile(template: string, options: CompilerOptions = { escape: t
         const layoutTemplate = layouts.get(name);
         if (!layoutTemplate) return () => '';
         
-        const layoutFunction = compile(layoutTemplate, options);
-        layoutCache.set(name, layoutFunction);
+        const layoutFunction = compile(layoutTemplate, options);        layoutCache.set(name, layoutFunction);
         return layoutFunction;
     };
+    
+    // Helper function to compile components on demand
+    const compileComponent = (name: string, options: CompilerOptions) => {
+        if (componentCache.has(name)) {
+            return componentCache.get(name)!;
+        }
+        const componentTemplate = components.get(name);
+        if (!componentTemplate) return () => '';
+        
+        const componentFunction = compile(componentTemplate, options);
+        componentCache.set(name, componentFunction);
+        return componentFunction;
+    };
       // Cache and return
-    const boundFunction = (data: unknown) => compiledFunction(data, layouts, layoutCache, compileLayout, escape, helpers);
+    const boundFunction = (data: unknown) => compiledFunction(data, layouts, layoutCache, compileLayout, escape, helpers, components, componentCache, compileComponent);
     compiledCache.set(cacheKey, boundFunction);
     
     return boundFunction;
@@ -167,7 +187,7 @@ function processTemplate(template: string, options: CompilerOptions, dataVar: st
 }
 
 interface TemplateConstruct {
-    type: 'variable' | 'if' | 'each' | 'layout' | 'blockHelper';
+    type: 'variable' | 'if' | 'each' | 'layout' | 'blockHelper' | 'helper' | 'component';
     start: number;
     end: number;
     variable?: string;
@@ -186,8 +206,7 @@ function findNextConstruct(template: string, startPos: number): TemplateConstruc
     
     // Find all possible constructs and their positions
     const possibilities: Array<{construct: TemplateConstruct, priority: number}> = [];
-    
-    // Layout {{> name}} - highest priority (simplest)
+      // Layout {{> name}} - highest priority (simplest)
     const layoutMatch = remaining.match(/\{\{>\s*([^}]+)\}\}/);
     if (layoutMatch && layoutMatch.index !== undefined) {
         possibilities.push({
@@ -201,6 +220,73 @@ function findNextConstruct(template: string, startPos: number): TemplateConstruc
         });
     }
     
+    // Triple brace helper call {{{helper args}}} - very high priority  
+    const tripleMatch = remaining.match(/\{\{\{([^}]+)\}\}\}/);
+    if (tripleMatch && tripleMatch.index !== undefined) {
+        const content = tripleMatch[1].trim();
+        // Parse helper name and arguments
+        const spaceIndex = content.indexOf(' ');
+        if (spaceIndex > 0) {
+            const helperName = content.slice(0, spaceIndex);
+            const helperArgs = content.slice(spaceIndex + 1);
+            possibilities.push({
+                construct: {
+                    type: 'helper',
+                    start: startPos + tripleMatch.index,
+                    end: startPos + tripleMatch.index + tripleMatch[0].length,
+                    variable: helperName,
+                    helperArgs: helperArgs
+                },
+                priority: 1.5
+            });
+        } else {
+            // No arguments, just helper name
+            possibilities.push({
+                construct: {                    type: 'helper',
+                    start: startPos + tripleMatch.index,
+                    end: startPos + tripleMatch.index + tripleMatch[0].length,
+                    variable: content,
+                    helperArgs: ''
+                },
+                priority: 1.5
+            });
+        }
+    }
+
+    // Component {{component "name" ...props}} - high priority
+    const componentMatch = remaining.match(/\{\{component\s+([^}]+)\}\}/);
+    if (componentMatch && componentMatch.index !== undefined) {
+        const content = componentMatch[1].trim();
+        // Parse component name and props
+        const spaceIndex = content.indexOf(' ');
+        if (spaceIndex > 0) {
+            const componentName = content.slice(0, spaceIndex);
+            const componentProps = content.slice(spaceIndex + 1);
+            possibilities.push({
+                construct: {
+                    type: 'component',
+                    start: startPos + componentMatch.index,
+                    end: startPos + componentMatch.index + componentMatch[0].length,
+                    variable: componentName.replace(/['"]/g, ''), // Remove quotes from component name
+                    helperArgs: componentProps
+                },
+                priority: 1.8
+            });
+        } else {
+            // Component without props
+            possibilities.push({
+                construct: {
+                    type: 'component',
+                    start: startPos + componentMatch.index,
+                    end: startPos + componentMatch.index + componentMatch[0].length,
+                    variable: content.replace(/['"]/g, ''), // Remove quotes from component name
+                    helperArgs: ''
+                },
+                priority: 1.8
+            });
+        }
+    }
+
     // Simple variable {{variable}} - high priority
     const varMatch = remaining.match(/\{\{([^#/>!][^}]*)\}\}/);
     if (varMatch && varMatch.index !== undefined) {
@@ -351,13 +437,16 @@ function findMatchingBlockEnd(template: string, blockStart: number, blockType: s
 function generateConstructCode(construct: TemplateConstruct, options: CompilerOptions, dataVar: string): string {
     switch (construct.type) {
         case 'variable':
-            return generateVariableCode(construct.variable!, options, dataVar);
-        case 'layout':
+            return generateVariableCode(construct.variable!, options, dataVar);        case 'layout':
             return generateLayoutCode(construct.variable!, options, dataVar);
         case 'each':
             return generateEachCode(construct.variable!, construct.content!, options, dataVar);
         case 'blockHelper':
             return generateBlockHelperCode(construct.variable!, construct.content!, construct.helperArgs || '', options, dataVar);
+        case 'helper':
+            return generateHelperCall(construct.variable!, construct.helperArgs || '', { escape: false }, dataVar);
+        case 'component':
+            return generateComponentCode(construct.variable!, construct.helperArgs || '', options, dataVar);
         case 'if':
             return generateIfCode(construct.condition!, construct.content!, construct.elseContent || '', construct.elseifConditions || [], options, dataVar);
         default:
@@ -411,6 +500,53 @@ function generateLayoutCode(layoutName: string, options: CompilerOptions, dataVa
     if (layouts.has(${JSON.stringify(layoutName)})) {
         const layoutFunction = compileLayout(${JSON.stringify(layoutName)}, ${JSON.stringify(options)});
         result += layoutFunction(${dataVar});
+    }
+}
+`;
+}
+
+/**
+ * Generate code for a component
+ */
+function generateComponentCode(componentName: string, propsString: string, options: CompilerOptions, dataVar: string): string {
+    const varName = `component_${Math.random().toString(36).substr(2, 9)}`;
+    const propsVar = `props_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Parse component props
+    const { args, hash } = parseHelperArguments(propsString);
+    
+    // Generate code to build props object
+    const propsEntries: string[] = [];
+    
+    // Add positional arguments as numbered props
+    args.forEach((arg, index) => {
+        if ((arg.startsWith('"') && arg.endsWith('"')) || 
+            (arg.startsWith("'") && arg.endsWith("'"))) {
+            propsEntries.push(`${JSON.stringify(index.toString())}: ${arg}`);
+        } else {
+            propsEntries.push(`${JSON.stringify(index.toString())}: ${generateDataAccessor(arg, dataVar)}`);
+        }
+    });
+    
+    // Add named props from hash
+    Object.entries(hash).forEach(([key, value]) => {
+        if ((value.startsWith('"') && value.endsWith('"')) || 
+            (value.startsWith("'") && value.endsWith("'"))) {
+            propsEntries.push(`${JSON.stringify(key)}: ${JSON.stringify(value.slice(1, -1))}`);
+        } else {
+            propsEntries.push(`${JSON.stringify(key)}: ${generateDataAccessor(value, dataVar)}`);
+        }
+    });
+      const propsCode = propsEntries.length > 0 
+        ? `const ${propsVar} = {${propsEntries.join(', ')}, '@parent': ${dataVar}};`
+        : `const ${propsVar} = {'@parent': ${dataVar}};`;
+    
+    return `
+{
+    if (components.has(${JSON.stringify(componentName)})) {
+        ${propsCode}
+        const ${varName} = compileComponent(${JSON.stringify(componentName)}, ${JSON.stringify(options)});
+        result += ${varName}(${propsVar});
     }
 }
 `;
@@ -578,6 +714,16 @@ function generateDataAccessor(path: string, dataVar: string): string {
     if (path === 'this') {
         return dataVar;
     }
+      // Handle @parent special case
+    if (path.startsWith('@parent')) {
+        if (path === '@parent') {
+            return `${dataVar}?.['@parent']`;
+        } else {
+            // Handle @parent.property
+            const subPath = path.slice(8); // Remove '@parent.'
+            return `${dataVar}?.['@parent']${generateSubPath(subPath)}`;
+        }
+    }
     
     // Handle simple property access
     if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(path)) {
@@ -600,27 +746,45 @@ function generateDataAccessor(path: string, dataVar: string): string {
 }
 
 /**
+ * Helper function to generate sub-path accessors
+ */
+function generateSubPath(path: string): string {
+    const parts = path.split('.');
+    let accessor = '';
+    
+    for (const part of parts) {
+        if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(part)) {
+            accessor += `?.${part}`;
+        } else {
+            accessor += `?.[${JSON.stringify(part)}]`;
+        }
+    }
+    
+    return accessor;
+}
+
+/**
  * Generate JavaScript condition code
  */
 function generateConditionCode(condition: string, dataVar: string): string {
     // Handle simple conditions like "visible", "visible == true", "user.isLoggedIn", etc.
     let code = condition.trim();
     
-    // Replace dotted property paths first (e.g., user.isLoggedIn)
-    code = code.replace(/\b([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)\b/g, (match, varPath) => {
+    // Replace property paths from right to left to avoid nested replacements
+    // This includes both @parent.xxx and regular.property.paths
+    code = code.replace(/(@parent(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*|[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)+|[a-zA-Z_][a-zA-Z0-9_]*)\b/g, (match) => {
         // Don't replace reserved words or numbers
-        if (['true', 'false', 'null', 'undefined', 'typeof', 'instanceof'].includes(varPath)) {
+        if (['true', 'false', 'null', 'undefined', 'typeof', 'instanceof'].includes(match)) {
             return match;
         }
-        if (/^\d+$/.test(varPath)) {
+        if (/^\d+$/.test(match)) {
             return match;
         }
-        // Check if it's a property path (contains dots)
-        if (varPath.includes('.')) {
-            return generateDataAccessor(varPath, dataVar);
-        } else {
-            return generateDataAccessor(varPath, dataVar);
+        // Skip if it looks like already processed (contains operators)
+        if (match.includes('?.') || match.includes('[')) {
+            return match;
         }
+        return generateDataAccessor(match, dataVar);
     });
     
     return `!!(${code})`;
@@ -712,35 +876,29 @@ function parseBlockHelperStructure(content: string): { mainContent: string; else
  * Generate helper call with options support
  */
 function generateHelperCall(helperName: string, helperArgs: string, options: CompilerOptions, dataVar: string): string {
-    // Parse helper arguments and hash options
-    const { args, hash } = parseHelperArguments(helperArgs);
+    // Parse helper arguments
+    const { args } = parseHelperArguments(helperArgs);
     
     const varName = `helper_${Math.random().toString(36).substr(2, 9)}`;
-    const hashName = `hash_${Math.random().toString(36).substr(2, 9)}`;
-      // Generate code to build hash object
-    const hashCode = Object.entries(hash).length > 0 
-        ? `const ${hashName} = {${Object.entries(hash).map(([key, value]) => {
-            // If value is a quoted string, use it as a literal
-            if ((value.startsWith('"') && value.endsWith('"')) || 
-                (value.startsWith("'") && value.endsWith("'"))) {
-                return `${JSON.stringify(key)}: ${JSON.stringify(value.slice(1, -1))}`;
-            } else {
-                // Otherwise treat as a data accessor
-                return `${JSON.stringify(key)}: ${generateDataAccessor(value, dataVar)}`;
-            }
-          }).join(', ')}};`
-        : `const ${hashName} = {};`;
     
     // Generate code to call helper
     const helperCode = args.length > 0 
-        ? `const ${varName} = helpers.get(${JSON.stringify(helperName)})?.call(null, ${args.map(arg => generateDataAccessor(arg, dataVar)).join(', ')}, { hash: ${hashName}, data: ${dataVar} });`
-        : `const ${varName} = helpers.get(${JSON.stringify(helperName)})?.call(null, ${dataVar}, { hash: ${hashName}, data: ${dataVar} });`;
-    
-    if (options.escape) {
+        ? `const ${varName} = helpers.get(${JSON.stringify(helperName)})?.call(null, ${args.map(arg => {
+            // Check if argument is a quoted string literal
+            if ((arg.startsWith('"') && arg.endsWith('"')) || 
+                (arg.startsWith("'") && arg.endsWith("'"))) {
+                // Return the string literal as-is (it will be a JavaScript string)
+                return arg;
+            } else {
+                // Treat as a data accessor (variable)
+                return generateDataAccessor(arg, dataVar);
+            }
+        }).join(', ')});`
+        : `const ${varName} = helpers.get(${JSON.stringify(helperName)})?.call(null);`;
+      if (options.escape) {
         return `
 {
     if (helpers.has(${JSON.stringify(helperName)})) {
-        ${hashCode}
         ${helperCode}
         if (typeof ${varName} === 'string') {
             result += escape(${varName});
@@ -754,7 +912,6 @@ function generateHelperCall(helperName: string, helperArgs: string, options: Com
         return `
 {
     if (helpers.has(${JSON.stringify(helperName)})) {
-        ${hashCode}
         ${helperCode}
         if (${varName} != null) {
             result += String(${varName});

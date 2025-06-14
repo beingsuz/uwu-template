@@ -1,1 +1,1 @@
-export { compile, registerLayout, registerHelper, registerBlockHelper, renderTemplate } from "./src/engine.ts";
+export { compile, registerLayout, registerHelper, registerBlockHelper, registerComponent, renderTemplate } from "./src/engine.ts";
