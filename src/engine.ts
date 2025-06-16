@@ -5,6 +5,98 @@ export interface CompilerOptions {
     escape: boolean;
 }
 
+// Enhanced error handling
+export class TemplateError extends Error {
+    constructor(
+        message: string,
+        public line?: number,
+        public column?: number,
+        public templateName?: string,
+        public context?: string
+    ) {
+        super(message);
+        this.name = 'TemplateError';
+        
+        // Create helpful error message with context
+        let fullMessage = message;
+        if (line !== undefined) {
+            fullMessage = `Line ${line}${column !== undefined ? `, Column ${column}` : ''}: ${message}`;
+        }
+        if (templateName) {
+            fullMessage = `Template "${templateName}" - ${fullMessage}`;
+        }
+        if (context) {
+            fullMessage += `\nContext: ${context}`;
+        }
+        
+        this.message = fullMessage;
+    }
+}
+
+export class TemplateSyntaxError extends TemplateError {
+    constructor(message: string, line?: number, column?: number, templateName?: string, context?: string) {
+        super(`Syntax Error: ${message}`, line, column, templateName, context);
+        this.name = 'TemplateSyntaxError';
+    }
+}
+
+export class TemplateRuntimeError extends TemplateError {
+    constructor(message: string, line?: number, column?: number, templateName?: string, context?: string) {
+        super(`Runtime Error: ${message}`, line, column, templateName, context);
+        this.name = 'TemplateRuntimeError';
+    }
+}
+
+// Line tracking utility
+class LineTracker {
+    private lines: string[];
+    private linePositions: number[];
+    
+    constructor(template: string) {
+        this.lines = template.split('\n');
+        this.linePositions = [0];
+        
+        let pos = 0;
+        for (let i = 0; i < this.lines.length - 1; i++) {
+            pos += this.lines[i].length + 1; // +1 for newline
+            this.linePositions.push(pos);
+        }
+    }
+    
+    getPosition(index: number): { line: number; column: number } {
+        let line = 1;
+        for (let i = 0; i < this.linePositions.length; i++) {
+            if (index < this.linePositions[i]) {
+                break;
+            }
+            line = i + 1;
+        }
+        
+        const lineStart = this.linePositions[line - 1];
+        const column = index - lineStart + 1;
+        
+        return { line, column };
+    }
+    
+    getLineContent(line: number): string {
+        return this.lines[line - 1] || '';
+    }
+    
+    getContext(index: number, contextLines = 2): string {
+        const { line } = this.getPosition(index);
+        const start = Math.max(1, line - contextLines);
+        const end = Math.min(this.lines.length, line + contextLines);
+        
+        const contextText = [];
+        for (let i = start; i <= end; i++) {
+            const prefix = i === line ? '>>> ' : '    ';
+            contextText.push(`${prefix}${i}: ${this.lines[i - 1]}`);
+        }
+        
+        return contextText.join('\n');
+    }
+}
+
 // Define helper types
 export interface HelperFunction {
     (...args: unknown[]): string;
@@ -96,17 +188,18 @@ export function renderTemplate(_key: string, data: unknown, template: string): s
 /**
  * Fast template compiler that generates optimized JavaScript functions
  */
-export function compile(template: string, options: CompilerOptions = { escape: true }): (data: unknown) => string {
+export function compile(template: string, options: CompilerOptions = { escape: true }, templateName?: string): (data: unknown) => string {
     // Check cache first
-    const cacheKey = template + JSON.stringify(options);
+    const cacheKey = template + JSON.stringify(options) + (templateName || '');
     if (compiledCache.has(cacheKey)) {
         return compiledCache.get(cacheKey)!;
     }
 
-    // Generate the JavaScript function body
-    const functionBody = compileToJS(template, options);
-      // Create the optimized function
-    const compiledFunction = new Function('data', 'layouts', 'layoutCache', 'compileLayout', 'escape', 'helpers', 'components', 'componentCache', 'compileComponent', functionBody);
+    try {
+        // Generate the JavaScript function body
+        const lineTracker = new LineTracker(template);
+        const functionBody = compileToJS(template, options, lineTracker, templateName);      // Create the optimized function
+    const compiledFunction = new Function('data', 'layouts', 'layoutCache', 'compileLayout', 'escape', 'helpers', 'components', 'componentCache', 'compileComponent', 'lineTracker', 'templateName', functionBody);
     
     // Helper function to compile layouts on demand
     const compileLayout = (name: string, options: CompilerOptions) => {
@@ -114,9 +207,12 @@ export function compile(template: string, options: CompilerOptions = { escape: t
             return layoutCache.get(name)!;
         }
         const layoutTemplate = layouts.get(name);
-        if (!layoutTemplate) return () => '';
+        if (!layoutTemplate) {
+            throw new TemplateError(`Layout "${name}" not found`, undefined, undefined, templateName);
+        }
         
-        const layoutFunction = compile(layoutTemplate, options);        layoutCache.set(name, layoutFunction);
+        const layoutFunction = compile(layoutTemplate, options, `layout:${name}`);
+        layoutCache.set(name, layoutFunction);
         return layoutFunction;
     };
     
@@ -126,25 +222,52 @@ export function compile(template: string, options: CompilerOptions = { escape: t
             return componentCache.get(name)!;
         }
         const componentTemplate = components.get(name);
-        if (!componentTemplate) return () => '';
+        if (!componentTemplate) {
+            throw new TemplateError(`Component "${name}" not found`, undefined, undefined, templateName);
+        }
         
-        const componentFunction = compile(componentTemplate, options);
+        const componentFunction = compile(componentTemplate, options, `component:${name}`);
         componentCache.set(name, componentFunction);
         return componentFunction;
     };
       // Cache and return
-    const boundFunction = (data: unknown) => compiledFunction(data, layouts, layoutCache, compileLayout, escape, helpers, components, componentCache, compileComponent);
+    const boundFunction = (data: unknown) => {
+        try {
+            return compiledFunction(data, layouts, layoutCache, compileLayout, escape, helpers, components, componentCache, compileComponent, lineTracker, templateName);
+        } catch (error) {
+            if (error instanceof TemplateError) {
+                throw error;
+            }
+            throw new TemplateRuntimeError(
+                `Error executing template: ${error instanceof Error ? error.message : String(error)}`,
+                undefined,
+                undefined,
+                templateName
+            );
+        }
+    };
     compiledCache.set(cacheKey, boundFunction);
     
     return boundFunction;
+    } catch (error) {
+        if (error instanceof TemplateError) {
+            throw error;
+        }
+        throw new TemplateSyntaxError(
+            `Error compiling template: ${error instanceof Error ? error.message : String(error)}`,
+            undefined,
+            undefined,
+            templateName
+        );
+    }
 }
 
 /**
  * Compile template to optimized JavaScript code
  */
-function compileToJS(template: string, options: CompilerOptions): string {
+function compileToJS(template: string, options: CompilerOptions, lineTracker: LineTracker, templateName?: string): string {
     let code = 'let result = "";\n';
-    code += processTemplate(template, options, 'data');
+    code += processTemplate(template, options, 'data', lineTracker, templateName);
     code += 'return result;\n';
     return code;
 }
@@ -152,13 +275,13 @@ function compileToJS(template: string, options: CompilerOptions): string {
 /**
  * Process template with proper block handling
  */
-function processTemplate(template: string, options: CompilerOptions, dataVar: string): string {
+function processTemplate(template: string, options: CompilerOptions, dataVar: string, lineTracker: LineTracker, templateName?: string): string {
     let code = '';
     let pos = 0;
     
     while (pos < template.length) {
         // Find the next construct
-        const nextConstruct = findNextConstruct(template, pos);
+        const nextConstruct = findNextConstruct(template, pos, lineTracker, templateName);
         
         if (!nextConstruct) {
             // No more constructs, add remaining content
@@ -178,7 +301,7 @@ function processTemplate(template: string, options: CompilerOptions, dataVar: st
         }
         
         // Generate code for construct
-        code += generateConstructCode(nextConstruct, options, dataVar);
+        code += generateConstructCode(nextConstruct, options, dataVar, lineTracker, templateName);
         
         pos = nextConstruct.end;
     }
@@ -187,7 +310,7 @@ function processTemplate(template: string, options: CompilerOptions, dataVar: st
 }
 
 interface TemplateConstruct {
-    type: 'variable' | 'if' | 'each' | 'layout' | 'blockHelper' | 'helper' | 'component' | 'raw';
+    type: 'variable' | 'if' | 'each' | 'layout' | 'blockHelper' | 'helper' | 'component' | 'raw' | 'extends' | 'block';
     start: number;
     end: number;
     variable?: string;
@@ -196,214 +319,349 @@ interface TemplateConstruct {
     elseContent?: string;
     elseifConditions?: Array<{condition: string, content: string}>;
     helperArgs?: string;
+    line?: number;
+    column?: number;
+}
+
+// Template inheritance system
+const templateBlocks = new Map<string, Map<string, string>>();
+const baseTemplates = new Map<string, string>();
+
+export function registerBaseTemplate(name: string, template: string) {
+    baseTemplates.set(name, template);
+}
+
+export function clearTemplateCache() {
+    compiledCache.clear();
+    layoutCache.clear();
+    componentCache.clear();
+    templateBlocks.clear();
 }
 
 /**
  * Find the next template construct in order
  */
-function findNextConstruct(template: string, startPos: number): TemplateConstruct | null {
+function findNextConstruct(template: string, startPos: number, lineTracker: LineTracker, templateName?: string): TemplateConstruct | null {
     const remaining = template.slice(startPos);
       // Find all possible constructs and their positions
     const possibilities: Array<{construct: TemplateConstruct, priority: number}> = [];
-    
-    // Raw block {{{{raw}}}} ... {{{{/raw}}}} - highest priority to avoid processing
-    const rawMatch = remaining.match(/\{\{\{\{raw\}\}\}\}/);
-    if (rawMatch && rawMatch.index !== undefined) {
-        const blockStart = startPos + rawMatch.index;
-        const blockEnd = template.indexOf('{{{{/raw}}}}', blockStart);
-        if (blockEnd > blockStart) {
-            const contentStart = blockStart + rawMatch[0].length;
-            const contentEnd = blockEnd;
-            possibilities.push({
-                construct: {
-                    type: 'raw',
-                    start: blockStart,
-                    end: blockEnd + '{{{{/raw}}}}'.length,
-                    content: template.slice(contentStart, contentEnd)
-                },
-                priority: 0.5
-            });
-        }
-    }
-      // Layout {{> name}} - highest priority (simplest)
-    const layoutMatch = remaining.match(/\{\{>\s*([^}]+)\}\}/);
-    if (layoutMatch && layoutMatch.index !== undefined) {
-        possibilities.push({
-            construct: {
-                type: 'layout',
-                start: startPos + layoutMatch.index,
-                end: startPos + layoutMatch.index + layoutMatch[0].length,
-                variable: layoutMatch[1].trim()
-            },
-            priority: 1
-        });
-    }
-    
-    // Triple brace helper call {{{helper args}}} - very high priority  
-    const tripleMatch = remaining.match(/\{\{\{([^}]+)\}\}\}/);
-    if (tripleMatch && tripleMatch.index !== undefined) {
-        const content = tripleMatch[1].trim();
-        // Parse helper name and arguments
-        const spaceIndex = content.indexOf(' ');
-        if (spaceIndex > 0) {
-            const helperName = content.slice(0, spaceIndex);
-            const helperArgs = content.slice(spaceIndex + 1);
-            possibilities.push({
-                construct: {
-                    type: 'helper',
-                    start: startPos + tripleMatch.index,
-                    end: startPos + tripleMatch.index + tripleMatch[0].length,
-                    variable: helperName,
-                    helperArgs: helperArgs
-                },
-                priority: 1.5
-            });
-        } else {
-            // No arguments, just helper name
-            possibilities.push({
-                construct: {                    type: 'helper',
-                    start: startPos + tripleMatch.index,
-                    end: startPos + tripleMatch.index + tripleMatch[0].length,
-                    variable: content,
-                    helperArgs: ''
-                },
-                priority: 1.5
-            });
-        }
-    }
 
-    // Component {{component "name" ...props}} - high priority
-    const componentMatch = remaining.match(/\{\{component\s+([^}]+)\}\}/);
-    if (componentMatch && componentMatch.index !== undefined) {
-        const content = componentMatch[1].trim();
-        // Parse component name and props
-        const spaceIndex = content.indexOf(' ');
-        if (spaceIndex > 0) {
-            const componentName = content.slice(0, spaceIndex);
-            const componentProps = content.slice(spaceIndex + 1);
+    try {
+        // Template extends {{extends "base"}} - highest priority
+        const extendsMatch = remaining.match(/\{\{extends\s+([^}]+)\}\}/);
+        if (extendsMatch && extendsMatch.index !== undefined) {
+            const position = lineTracker.getPosition(startPos + extendsMatch.index);
             possibilities.push({
                 construct: {
-                    type: 'component',
-                    start: startPos + componentMatch.index,
-                    end: startPos + componentMatch.index + componentMatch[0].length,
-                    variable: componentName.replace(/['"]/g, ''), // Remove quotes from component name
-                    helperArgs: componentProps
+                    type: 'extends',
+                    start: startPos + extendsMatch.index,
+                    end: startPos + extendsMatch.index + extendsMatch[0].length,
+                    variable: extendsMatch[1].trim().replace(/['"]/g, ''),
+                    line: position.line,
+                    column: position.column
                 },
-                priority: 1.8
-            });
-        } else {
-            // Component without props
-            possibilities.push({
-                construct: {
-                    type: 'component',
-                    start: startPos + componentMatch.index,
-                    end: startPos + componentMatch.index + componentMatch[0].length,
-                    variable: content.replace(/['"]/g, ''), // Remove quotes from component name
-                    helperArgs: ''
-                },
-                priority: 1.8
+                priority: 0.1
             });
         }
-    }
 
-    // Simple variable {{variable}} - high priority
-    const varMatch = remaining.match(/\{\{([^#/>!][^}]*)\}\}/);
-    if (varMatch && varMatch.index !== undefined) {
-        possibilities.push({
-            construct: {
-                type: 'variable',
-                start: startPos + varMatch.index,
-                end: startPos + varMatch.index + varMatch[0].length,
-                variable: varMatch[1].trim()
-            },
-            priority: 2
-        });
-    }
-      // Each block {{#each}} ... {{/each}} - lower priority (complex)
-    const eachMatch = remaining.match(/\{\{#each\s+([^}]+)\}\}/);
-    if (eachMatch && eachMatch.index !== undefined) {
-        const blockStart = startPos + eachMatch.index;
-        const blockEnd = findMatchingBlockEnd(template, blockStart, 'each');
-        if (blockEnd > blockStart) {
-            const contentStart = blockStart + eachMatch[0].length;
-            const contentEnd = blockEnd - '{{/each}}'.length;
-            possibilities.push({
-                construct: {
-                    type: 'each',
-                    start: blockStart,
-                    end: blockEnd,
-                    variable: eachMatch[1].trim(),
-                    content: template.slice(contentStart, contentEnd)
-                },
-                priority: 3
-            });
-        }
-    }
-    
-    // Block helper {{#helperName}} ... {{/helperName}} - similar priority to each
-    const blockHelperMatch = remaining.match(/\{\{#(\w+)(?:\s+([^}]*))?\}\}/);
-    if (blockHelperMatch && blockHelperMatch.index !== undefined) {
-        const helperName = blockHelperMatch[1];
-        // Skip built-in helpers
-        if (!['if', 'each', 'elseif', 'else'].includes(helperName)) {
-            const blockStart = startPos + blockHelperMatch.index;
-            const blockEnd = findMatchingBlockEnd(template, blockStart, helperName);
+        // Block definition {{#block "name"}} ... {{/block}} - very high priority
+        const blockMatch = remaining.match(/\{\{#block\s+([^}]+)\}\}/);
+        if (blockMatch && blockMatch.index !== undefined) {
+            const blockStart = startPos + blockMatch.index;
+            const blockEnd = findMatchingBlockEnd(template, blockStart, 'block');
             if (blockEnd > blockStart) {
-                const contentStart = blockStart + blockHelperMatch[0].length;
-                const contentEnd = blockEnd - `{{/${helperName}}}`.length;
+                const position = lineTracker.getPosition(blockStart);
+                const contentStart = blockStart + blockMatch[0].length;
+                const contentEnd = blockEnd - '{{/block}}'.length;
                 possibilities.push({
                     construct: {
-                        type: 'blockHelper',
+                        type: 'block',
                         start: blockStart,
                         end: blockEnd,
-                        variable: helperName,
+                        variable: blockMatch[1].trim().replace(/['"]/g, ''),
                         content: template.slice(contentStart, contentEnd),
-                        helperArgs: blockHelperMatch[2]?.trim() || ''
+                        line: position.line,
+                        column: position.column
                     },
-                    priority: 3
+                    priority: 0.2
                 });
             }
         }
-    }
-      // If block {{#if}} ... {{#elseif}} ... {{#else}} ... {{/if}} - lowest priority (most complex)
-    const ifMatch = remaining.match(/\{\{#if\s+([^}]+)\}\}/);
-    if (ifMatch && ifMatch.index !== undefined) {
-        const blockStart = startPos + ifMatch.index;
-        const blockEnd = findMatchingBlockEnd(template, blockStart, 'if');
-        if (blockEnd > blockStart) {
-            const contentStart = blockStart + ifMatch[0].length;
-            const contentEnd = blockEnd - '{{/if}}'.length;
-            const fullContent = template.slice(contentStart, contentEnd);
-            
-            // Parse if-elseif-else structure
-            const ifElseStructure = parseIfElseStructure(fullContent);
-            
+    
+        // Raw block {{{{raw}}}} ... {{{{/raw}}}} - highest priority to avoid processing
+        const rawMatch = remaining.match(/\{\{\{\{raw\}\}\}\}/);
+        if (rawMatch && rawMatch.index !== undefined) {
+            const blockStart = startPos + rawMatch.index;
+            const blockEnd = template.indexOf('{{{{/raw}}}}', blockStart);
+            if (blockEnd > blockStart) {
+                const position = lineTracker.getPosition(blockStart);
+                const contentStart = blockStart + rawMatch[0].length;
+                const contentEnd = blockEnd;
+                possibilities.push({
+                    construct: {
+                        type: 'raw',
+                        start: blockStart,
+                        end: blockEnd + '{{{{/raw}}}}'.length,
+                        content: template.slice(contentStart, contentEnd),
+                        line: position.line,
+                        column: position.column
+                    },
+                    priority: 0.5
+                });
+            } else {
+                const position = lineTracker.getPosition(blockStart);
+                throw new TemplateSyntaxError(
+                    'Unclosed raw block',
+                    position.line,
+                    position.column,
+                    templateName,
+                    lineTracker.getContext(blockStart)
+                );
+            }
+        }      // Layout {{> name}} - highest priority (simplest)
+        const layoutMatch = remaining.match(/\{\{>\s*([^}]+)\}\}/);
+        if (layoutMatch && layoutMatch.index !== undefined) {
+            const position = lineTracker.getPosition(startPos + layoutMatch.index);
             possibilities.push({
                 construct: {
-                    type: 'if',
-                    start: blockStart,
-                    end: blockEnd,
-                    condition: ifMatch[1].trim(),
-                    content: ifElseStructure.ifContent,
-                    elseContent: ifElseStructure.elseContent,
-                    elseifConditions: ifElseStructure.elseifConditions
+                    type: 'layout',
+                    start: startPos + layoutMatch.index,
+                    end: startPos + layoutMatch.index + layoutMatch[0].length,
+                    variable: layoutMatch[1].trim(),
+                    line: position.line,
+                    column: position.column
                 },
-                priority: 4
+                priority: 1
             });
         }
-    }
-    
-    if (possibilities.length === 0) return null;
-    
-    // Sort by position first, then by priority for ties
-    possibilities.sort((a, b) => {
-        if (a.construct.start !== b.construct.start) {
-            return a.construct.start - b.construct.start;
+        
+        // Triple brace helper call {{{helper args}}} - very high priority  
+        const tripleMatch = remaining.match(/\{\{\{([^}]+)\}\}\}/);
+        if (tripleMatch && tripleMatch.index !== undefined) {
+            const content = tripleMatch[1].trim();
+            const position = lineTracker.getPosition(startPos + tripleMatch.index);
+            // Parse helper name and arguments
+            const spaceIndex = content.indexOf(' ');
+            if (spaceIndex > 0) {
+                const helperName = content.slice(0, spaceIndex);
+                const helperArgs = content.slice(spaceIndex + 1);
+                possibilities.push({
+                    construct: {
+                        type: 'helper',
+                        start: startPos + tripleMatch.index,
+                        end: startPos + tripleMatch.index + tripleMatch[0].length,
+                        variable: helperName,
+                        helperArgs: helperArgs,
+                        line: position.line,
+                        column: position.column
+                    },
+                    priority: 1.5
+                });
+            } else {
+                // No arguments, just helper name
+                possibilities.push({
+                    construct: {
+                        type: 'helper',
+                        start: startPos + tripleMatch.index,
+                        end: startPos + tripleMatch.index + tripleMatch[0].length,
+                        variable: content,
+                        helperArgs: '',
+                        line: position.line,
+                        column: position.column
+                    },
+                    priority: 1.5
+                });
+            }
         }
-        return a.priority - b.priority;
-    });
     
-    return possibilities[0].construct;
+        // Component {{component "name" ...props}} - high priority
+        const componentMatch = remaining.match(/\{\{component\s+([^}]+)\}\}/);
+        if (componentMatch && componentMatch.index !== undefined) {
+            const content = componentMatch[1].trim();
+            const position = lineTracker.getPosition(startPos + componentMatch.index);
+            // Parse component name and props
+            const spaceIndex = content.indexOf(' ');
+            if (spaceIndex > 0) {
+                const componentName = content.slice(0, spaceIndex);
+                const componentProps = content.slice(spaceIndex + 1);
+                possibilities.push({
+                    construct: {
+                        type: 'component',
+                        start: startPos + componentMatch.index,
+                        end: startPos + componentMatch.index + componentMatch[0].length,
+                        variable: componentName.replace(/['"]/g, ''), // Remove quotes from component name
+                        helperArgs: componentProps,
+                        line: position.line,
+                        column: position.column
+                    },
+                    priority: 1.8
+                });
+            } else {
+                // Component without props
+                possibilities.push({
+                    construct: {
+                        type: 'component',
+                        start: startPos + componentMatch.index,
+                        end: startPos + componentMatch.index + componentMatch[0].length,
+                        variable: content.replace(/['"]/g, ''), // Remove quotes from component name
+                        helperArgs: '',
+                        line: position.line,
+                        column: position.column
+                    },
+                    priority: 1.8
+                });
+            }
+        }
+    
+        // Simple variable {{variable}} - high priority
+        const varMatch = remaining.match(/\{\{([^#/>!][^}]*)\}\}/);
+        if (varMatch && varMatch.index !== undefined) {
+            const position = lineTracker.getPosition(startPos + varMatch.index);
+            possibilities.push({
+                construct: {
+                    type: 'variable',
+                    start: startPos + varMatch.index,
+                    end: startPos + varMatch.index + varMatch[0].length,
+                    variable: varMatch[1].trim(),
+                    line: position.line,
+                    column: position.column
+                },
+                priority: 2
+            });
+        }      // Each block {{#each}} ... {{/each}} - lower priority (complex)
+        const eachMatch = remaining.match(/\{\{#each\s+([^}]+)\}\}/);
+        if (eachMatch && eachMatch.index !== undefined) {
+            const blockStart = startPos + eachMatch.index;
+            const blockEnd = findMatchingBlockEnd(template, blockStart, 'each');
+            if (blockEnd > blockStart) {
+                const position = lineTracker.getPosition(blockStart);
+                const contentStart = blockStart + eachMatch[0].length;
+                const contentEnd = blockEnd - '{{/each}}'.length;
+                possibilities.push({
+                    construct: {
+                        type: 'each',
+                        start: blockStart,
+                        end: blockEnd,
+                        variable: eachMatch[1].trim(),
+                        content: template.slice(contentStart, contentEnd),
+                        line: position.line,
+                        column: position.column
+                    },
+                    priority: 3
+                });
+            } else {
+                const position = lineTracker.getPosition(blockStart);
+                throw new TemplateSyntaxError(
+                    'Unclosed each block',
+                    position.line,
+                    position.column,
+                    templateName,
+                    lineTracker.getContext(blockStart)
+                );
+            }
+        }
+        
+        // Block helper {{#helperName}} ... {{/helperName}} - similar priority to each
+        const blockHelperMatch = remaining.match(/\{\{#(\w+)(?:\s+([^}]*))?\}\}/);
+        if (blockHelperMatch && blockHelperMatch.index !== undefined) {
+            const helperName = blockHelperMatch[1];
+            // Skip built-in helpers
+            if (!['if', 'each', 'elseif', 'else', 'block'].includes(helperName)) {
+                const blockStart = startPos + blockHelperMatch.index;
+                const blockEnd = findMatchingBlockEnd(template, blockStart, helperName);
+                if (blockEnd > blockStart) {
+                    const position = lineTracker.getPosition(blockStart);
+                    const contentStart = blockStart + blockHelperMatch[0].length;
+                    const contentEnd = blockEnd - `{{/${helperName}}}`.length;
+                    possibilities.push({
+                        construct: {
+                            type: 'blockHelper',
+                            start: blockStart,
+                            end: blockEnd,
+                            variable: helperName,
+                            content: template.slice(contentStart, contentEnd),
+                            helperArgs: blockHelperMatch[2]?.trim() || '',
+                            line: position.line,
+                            column: position.column
+                        },
+                        priority: 3
+                    });
+                } else {
+                    const position = lineTracker.getPosition(blockStart);
+                    throw new TemplateSyntaxError(
+                        `Unclosed block helper "${helperName}"`,
+                        position.line,
+                        position.column,
+                        templateName,
+                        lineTracker.getContext(blockStart)
+                    );
+                }
+            }
+        }
+      // If block {{#if}} ... {{#elseif}} ... {{#else}} ... {{/if}} - lowest priority (most complex)
+        const ifMatch = remaining.match(/\{\{#if\s+([^}]+)\}\}/);
+        if (ifMatch && ifMatch.index !== undefined) {
+            const blockStart = startPos + ifMatch.index;
+            const blockEnd = findMatchingBlockEnd(template, blockStart, 'if');
+            if (blockEnd > blockStart) {
+                const position = lineTracker.getPosition(blockStart);
+                const contentStart = blockStart + ifMatch[0].length;
+                const contentEnd = blockEnd - '{{/if}}'.length;
+                const fullContent = template.slice(contentStart, contentEnd);
+                
+                // Parse if-elseif-else structure
+                const ifElseStructure = parseIfElseStructure(fullContent);
+                
+                possibilities.push({
+                    construct: {
+                        type: 'if',
+                        start: blockStart,
+                        end: blockEnd,
+                        condition: ifMatch[1].trim(),
+                        content: ifElseStructure.ifContent,
+                        elseContent: ifElseStructure.elseContent,
+                        elseifConditions: ifElseStructure.elseifConditions,
+                        line: position.line,
+                        column: position.column
+                    },
+                    priority: 4
+                });
+            } else {
+                const position = lineTracker.getPosition(blockStart);
+                throw new TemplateSyntaxError(
+                    'Unclosed if block',
+                    position.line,
+                    position.column,
+                    templateName,
+                    lineTracker.getContext(blockStart)
+                );
+            }
+        }
+        
+        if (possibilities.length === 0) return null;
+        
+        // Sort by position first, then by priority for ties
+        possibilities.sort((a, b) => {
+            if (a.construct.start !== b.construct.start) {
+                return a.construct.start - b.construct.start;
+            }
+            return a.priority - b.priority;
+        });
+        
+        return possibilities[0].construct;
+    } catch (error) {
+        if (error instanceof TemplateError) {
+            throw error;
+        }
+        const position = lineTracker.getPosition(startPos);
+        throw new TemplateSyntaxError(
+            `Error parsing template: ${error instanceof Error ? error.message : String(error)}`,
+            position.line,
+            position.column,
+            templateName,
+            lineTracker.getContext(startPos)
+        );
+    }
 }
 
 /**
@@ -453,24 +711,42 @@ function findMatchingBlockEnd(template: string, blockStart: number, blockType: s
 /**
  * Generate JavaScript code for a construct
  */
-function generateConstructCode(construct: TemplateConstruct, options: CompilerOptions, dataVar: string): string {
-    switch (construct.type) {
-        case 'variable':
-            return generateVariableCode(construct.variable!, options, dataVar);        case 'layout':
-            return generateLayoutCode(construct.variable!, options, dataVar);
-        case 'each':
-            return generateEachCode(construct.variable!, construct.content!, options, dataVar);
-        case 'blockHelper':
-            return generateBlockHelperCode(construct.variable!, construct.content!, construct.helperArgs || '', options, dataVar);        case 'helper':
-            return generateHelperCall(construct.variable!, construct.helperArgs || '', { escape: false }, dataVar);
-        case 'component':
-            return generateComponentCode(construct.variable!, construct.helperArgs || '', options, dataVar);
-        case 'raw':
-            return generateRawCode(construct.content!);
-        case 'if':
-            return generateIfCode(construct.condition!, construct.content!, construct.elseContent || '', construct.elseifConditions || [], options, dataVar);
-        default:
-            return '';
+function generateConstructCode(construct: TemplateConstruct, options: CompilerOptions, dataVar: string, lineTracker: LineTracker, templateName?: string): string {
+    try {
+        switch (construct.type) {
+            case 'variable':
+                return generateVariableCode(construct.variable!, options, dataVar);
+            case 'layout':
+                return generateLayoutCode(construct.variable!, options, dataVar);
+            case 'each':
+                return generateEachCode(construct.variable!, construct.content!, options, dataVar, lineTracker, templateName);            case 'blockHelper':
+                return generateBlockHelperCode(construct.variable!, construct.content!, construct.helperArgs || '', options, dataVar, lineTracker, templateName);
+            case 'helper':
+                return generateHelperCall(construct.variable!, construct.helperArgs || '', { escape: false }, dataVar);
+            case 'component':
+                return generateComponentCode(construct.variable!, construct.helperArgs || '', options, dataVar);
+            case 'raw':
+                return generateRawCode(construct.content!);
+            case 'if':
+                return generateIfCode(construct.condition!, construct.content!, construct.elseContent || '', construct.elseifConditions || [], options, dataVar, lineTracker, templateName);
+            case 'extends':
+                return generateExtendsCode(construct.variable!, templateName);
+            case 'block':
+                return generateBlockCode(construct.variable!, construct.content!, templateName);
+            default:
+                throw new Error(`Unknown construct type: ${(construct as any).type}`);
+        }
+    } catch (error) {
+        if (error instanceof TemplateError) {
+            throw error;
+        }
+        throw new TemplateSyntaxError(
+            `Error generating code for ${construct.type}: ${error instanceof Error ? error.message : String(error)}`,
+            construct.line,
+            construct.column,
+            templateName,
+            construct.line ? lineTracker.getContext(construct.start) : undefined
+        );
     }
 }
 
@@ -575,12 +851,12 @@ function generateComponentCode(componentName: string, propsString: string, optio
 /**
  * Generate code for an each loop
  */
-function generateEachCode(variable: string, content: string, options: CompilerOptions, dataVar: string): string {
+function generateEachCode(variable: string, content: string, options: CompilerOptions, dataVar: string, lineTracker: LineTracker, templateName?: string): string {
     const accessor = generateDataAccessor(variable, dataVar);
     const itemVar = `item_${Math.random().toString(36).substr(2, 9)}`;
     const indexVar = `index_${Math.random().toString(36).substr(2, 9)}`;
     
-    const innerCode = processTemplate(content, options, itemVar);
+    const innerCode = processTemplate(content, options, itemVar, lineTracker, templateName);
     
     return `
 {
@@ -598,7 +874,7 @@ function generateEachCode(variable: string, content: string, options: CompilerOp
 /**
  * Generate code for a block helper
  */
-function generateBlockHelperCode(helperName: string, content: string, helperArgs: string, options: CompilerOptions, dataVar: string): string {
+function generateBlockHelperCode(helperName: string, content: string, helperArgs: string, options: CompilerOptions, dataVar: string, lineTracker?: LineTracker, templateName?: string): string {
     const { args, hash } = parseHelperArguments(helperArgs);
     
     const fnName = `fn_${Math.random().toString(36).substr(2, 9)}`;
@@ -608,6 +884,9 @@ function generateBlockHelperCode(helperName: string, content: string, helperArgs
     
     // Parse if/else structure in the block content
     const blockStructure = parseBlockHelperStructure(content);
+    
+    // Use a fallback lineTracker if not provided
+    const tracker = lineTracker || new LineTracker(content);
     
     // Generate hash object
     const hashCode = Object.entries(hash).length > 0 
@@ -628,7 +907,7 @@ function generateBlockHelperCode(helperName: string, content: string, helperArgs
         const ${fnName} = (context) => {
             const childData = context || ${dataVar};
             let childResult = '';
-            ${processTemplate(blockStructure.mainContent, options, 'childData').replace(/result \+=/g, 'childResult +=')}
+            ${processTemplate(blockStructure.mainContent, options, 'childData', tracker, templateName).replace(/result \+=/g, 'childResult +=')}
             return childResult;
         };
     `;
@@ -637,7 +916,7 @@ function generateBlockHelperCode(helperName: string, content: string, helperArgs
         const ${inverseName} = (context) => {
             const childData = context || ${dataVar};
             let childResult = '';
-            ${processTemplate(blockStructure.elseContent, options, 'childData').replace(/result \+=/g, 'childResult +=')}
+            ${processTemplate(blockStructure.elseContent, options, 'childData', tracker, templateName).replace(/result \+=/g, 'childResult +=')}
             return childResult;
         };
     `;
@@ -692,10 +971,12 @@ function generateIfCode(
     elseContent: string, 
     elseifConditions: Array<{condition: string, content: string}>, 
     options: CompilerOptions, 
-    dataVar: string
+    dataVar: string,
+    lineTracker: LineTracker,
+    templateName?: string
 ): string {
     const conditionCode = generateConditionCode(condition, dataVar);
-    const ifCode = processTemplate(content, options, dataVar);
+    const ifCode = processTemplate(content, options, dataVar, lineTracker, templateName);
     
     let code = `
 {
@@ -705,7 +986,7 @@ function generateIfCode(
     // Add elseif blocks
     for (const elseif of elseifConditions) {
         const elseifConditionCode = generateConditionCode(elseif.condition, dataVar);
-        const elseifCode = processTemplate(elseif.content, options, dataVar);
+        const elseifCode = processTemplate(elseif.content, options, dataVar, lineTracker, templateName);
         code += `
     } else if (${elseifConditionCode}) {
         ${elseifCode}`;
@@ -713,7 +994,7 @@ function generateIfCode(
     
     // Add else block if present
     if (elseContent) {
-        const elseCode = processTemplate(elseContent, options, dataVar);
+        const elseCode = processTemplate(elseContent, options, dataVar, lineTracker, templateName);
         code += `
     } else {
         ${elseCode}`;
@@ -1011,4 +1292,41 @@ function generateRawCode(content: string): string {
     // Escape the content to prevent JavaScript injection and properly handle quotes
     const escapedContent = JSON.stringify(content);
     return `result += ${escapedContent};\n`;
+}
+
+/**
+ * Generate code for template inheritance extends
+ */
+function generateExtendsCode(baseTemplateName: string, templateName?: string): string {
+    return `
+{
+    // Handle template extends
+    const baseTemplate = layouts.get(${JSON.stringify(baseTemplateName)}) || components.get(${JSON.stringify(baseTemplateName)});
+    if (!baseTemplate) {
+        throw new Error('Base template "' + ${JSON.stringify(baseTemplateName)} + '" not found');
+    }
+    const baseCompiled = compileLayout(${JSON.stringify(baseTemplateName)}, { escape: true });
+    result += baseCompiled(data);
+}
+`;
+}
+
+/**
+ * Generate code for block definition
+ */
+function generateBlockCode(blockName: string, content: string, templateName?: string): string {
+    // Store block content for inheritance
+    const blockKey = templateName || 'anonymous';
+    return `
+{
+    // Define block for inheritance
+    if (!templateBlocks.has(${JSON.stringify(blockKey)})) {
+        templateBlocks.set(${JSON.stringify(blockKey)}, new Map());
+    }
+    templateBlocks.get(${JSON.stringify(blockKey)}).set(${JSON.stringify(blockName)}, ${JSON.stringify(content)});
+    
+    // Render block content immediately (can be overridden)
+    ${processTemplate(content, { escape: true }, 'data', new LineTracker(content), templateName)}
+}
+`;
 }

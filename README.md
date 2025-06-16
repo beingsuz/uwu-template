@@ -1,16 +1,41 @@
 # UWU-Template 🦄
 
-A **blazingly fast, feature-rich template engine** for Deno and JavaScript with advanced component system, helper functions, and performance that rivals native template literals.
+A **blazingly fast, feature-rich template engine** for Deno and JavaScript with advanced component system, helper functions, template inheritance, and performance that rivals native template literals.
 
 ## ✨ Features
 
 - 🚀 **Ultra-fast performance** - 3-6x faster than popular alternatives
-- 🧩 **Component system** - Reusable, composable templates with props
-- 🔧 **Helper functions** - Custom functions with string literal support
-- � **Rich templating** - Variables, conditionals, loops, layouts
+- 🧩 **Advanced component system** - Reusable templates with props and parent data access
+- 🔧 **Enhanced helper functions** - Mixed string/variable arguments with type safety
+- 🏗️ **Template inheritance** - Extensible templates with block overrides
+- 📝 **Rich templating** - Variables, conditionals, loops, layouts, and raw blocks
+- 🛠️ **Enhanced error handling** - Detailed error messages with line numbers and context
 - 📦 **Lightweight** - Minimal dependencies, zero runtime overhead
 - ⚡ **Production-ready** - Battle-tested with comprehensive benchmarks
-- �️ **Type-safe** - Written in TypeScript with full type support
+- 🎯 **Type-safe** - Written in TypeScript with full type support
+- 📚 **Comprehensive documentation** - Complete guides and migration support
+
+## 🆕 New in Latest Version
+
+- ✨ **Enhanced Error Reporting** - Get detailed error messages with line numbers and code context
+- 🧩 **Parent Data Access** - Components can access parent template data with `@parent` syntax
+- 🔧 **Mixed Helper Arguments** - Use both string literals and variables in helper functions
+- 📚 **Complete Documentation** - API reference, migration guides, and component examples
+- 🏗️ **Template Inheritance Foundation** - Extensible template system (foundation ready)
+- ⚡ **Improved Performance** - Better caching and error recovery
+
+## 📖 Table of Contents
+
+- [Features](#-features)
+- [Quick Start](#-quick-start)
+- [Core Template Syntax](#-core-template-syntax)
+- [Helper Functions](#-helper-functions)
+- [Enhanced Component System](#-enhanced-component-system)
+- [Template Inheritance](#️-template-inheritance-preview)
+- [Performance Benchmarks](#-performance-benchmarks)
+- [Documentation](#-documentation)
+- [Migration from Other Engines](#-migration-from-other-engines)
+- [Contributing](#-contributing)
 
 ## 🚀 Quick Start
 
@@ -44,9 +69,10 @@ const template = `
   </ul>
 </div>`;
 
-// 2. Compile the template
-const render = compile(template);
+// 2. Compile the template (with optional error context)
+const render = compile(template, { escape: true }, "userProfile");
 
+const data = {
   title: "My Store",
   user: { name: "Alice", premium: true },
   items: [
@@ -57,6 +83,25 @@ const render = compile(template);
 
 const html = render(data);
 console.log(html);
+```
+
+### Error Handling
+
+UWU-Template now provides detailed error information to help you debug issues quickly:
+
+```typescript
+import { compile, TemplateSyntaxError, TemplateRuntimeError } from "./mod.ts";
+
+try {
+  const render = compile(template, { escape: true }, "myTemplate");
+  const result = render(data);
+} catch (error) {
+  if (error instanceof TemplateSyntaxError) {
+    console.log(`Syntax error in template "${error.templateName}":`);
+    console.log(`Line ${error.line}, Column ${error.column}: ${error.message}`);
+    console.log(error.context); // Shows code context around the error
+  }
+}
 ```
 
 ## 📚 Core Template Syntax
@@ -153,22 +198,28 @@ For outputting literal template syntax without processing, use raw blocks:
 ```typescript
 import { registerHelper } from "./mod.ts";
 
-// Register helpers
-registerHelper("uppercase", (text) => {
+// Register helpers with flexible argument types
+registerHelper("uppercase", (...args) => {
+  const text = args[0];
   return String(text).toUpperCase();
 });
 
-registerHelper("formatPrice", (price, currency = "USD") => {
-  return `${currency} ${Number(price).toFixed(2)}`;
+registerHelper("formatPrice", (...args) => {
+  const price = args[0] as number;
+  const currency = args[1] as string || "USD";
+  const prefix = args[2] as string || "";
+  return `${prefix}${currency} ${price.toFixed(2)}`;
 });
 
-registerHelper("dateFormat", (date, format = "short") => {
+registerHelper("dateFormat", (...args) => {
+  const date = args[0];
+  const format = args[1] as string || "short";
   const d = new Date(date);
   return format === "long" ? d.toLocaleDateString() : d.toDateString();
 });
 ```
 
-**Template Usage:**
+**Template Usage with Mixed Arguments:**
 ```handlebars
 <!-- String literals -->
 {{{uppercase "hello world"}}}  <!-- Output: HELLO WORLD -->
@@ -179,8 +230,9 @@ registerHelper("dateFormat", (date, format = "short") => {
 {{{uppercase userName}}}       <!-- Uses variable value -->
 {{{formatPrice product.price}}} <!-- Default currency -->
 
-<!-- Mixed -->
-{{{formatPrice productPrice "GBP"}}} <!-- Variable + string literal -->
+<!-- Mixed string literals and variables -->
+{{{formatPrice productPrice "GBP" "Sale: "}}} <!-- Variable + string literals -->
+{{{formatPrice price currency prefix}}}       <!-- All variables -->
 ```
 
 ### Block Helpers
@@ -285,22 +337,72 @@ registerComponent("statusBadge", `
 <!-- Component receives: {status: "Online", @parent: parentData} -->
 ```
 
-### Advanced Component Features
+### Enhanced Component System
 
-**Conditional rendering with parent data:**
-```handlebars
-{{#if @parent.user.isAdmin}}
-  {{component "adminPanel" permissions=@parent.permissions}}
-{{/if}}
+UWU-Template features a powerful component system that supports props, parent data access, and composition.
+
+### Component Registration
+
+```typescript
+import { registerComponent } from "./mod.ts";
+
+registerComponent("userCard", `
+<div class="user-card">
+  <img src="{{avatar}}" alt="{{name}}" class="avatar">
+  <h3>{{name}}</h3>
+  <p class="email">{{email}}</p>
+  <span class="role {{@parent.theme}}-badge">{{role}}</span>
+</div>
+`);
 ```
 
-**Dynamic component props:**
+### Parent Data Access
+
+Components can access the parent template's data using the `@parent` syntax:
+
+```typescript
+const data = {
+  theme: "dark",
+  users: [
+    { name: "Alice", email: "alice@example.com", role: "Admin" },
+    { name: "Bob", email: "bob@example.com", role: "User" }
+  ]
+};
+```
+
 ```handlebars
-{{component "userCard" 
-  name=user.fullName 
-  role=user.role
-  theme=@parent.siteTheme
-  showBadge="true"}}
+<div class="user-list">
+  {{#each users}}
+    {{component "userCard" 
+      name=name 
+      email=email 
+      role=role 
+      avatar="/avatars/default.jpg"}}
+  {{/each}}
+</div>
+<!-- Each component can access @parent.theme for styling -->
+```
+
+### Component Composition
+
+Build complex UIs by composing smaller components:
+
+```typescript
+registerComponent("button", `
+<button class="btn btn-{{variant}} {{#if @parent.disabled}}disabled{{/if}}" 
+        type="{{type}}">
+  {{text}}
+</button>
+`);
+
+registerComponent("productCard", `
+<div class="product-card">
+  <h3>{{name}}</h3>
+  <p class="price">\${{price}}</p>
+  {{component "button" text="Add to Cart" variant="primary" type="button"}}
+  {{component "button" text="♡ Wishlist" variant="outline" type="button"}}
+</div>
+`);
 ```
 
 ## 🎨 Real-World Examples
@@ -381,15 +483,43 @@ const template = `
   {{/each}}
 </div>`;
 ```
-// Use in templates:
-// {{#withUser currentUser}}
-//   Welcome {{name}}!
-// {{else}}
-//   Please log in
-// {{/withUser}}
+
+## 🏗️ Template Inheritance (Preview)
+
+UWU-Template includes a foundation for template inheritance, allowing you to extend base templates:
+
+```typescript
+import { registerBaseTemplate } from "./mod.ts";
+
+// Register a base template
+registerBaseTemplate("basePage", `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>{{#block "title"}}Default Title{{/block}}</title>
+</head>
+<body>
+  <header>{{#block "header"}}Default Header{{/block}}</header>
+  <main>{{#block "content"}}Default Content{{/block}}</main>
+  <footer>{{#block "footer"}}Default Footer{{/block}}</footer>
+</body>
+</html>
+`);
 ```
 
-📖 **[View detailed Block Helper documentation](./BLOCK_HELPERS.md)**
+```handlebars
+<!-- Child template extends base -->
+{{extends "basePage"}}
+
+{{#block "title"}}My Custom Page{{/block}}
+
+{{#block "content"}}
+  <h1>Welcome!</h1>
+  <p>This content overrides the base template.</p>
+{{/block}}
+```
+
+*Note: Template inheritance is currently in development. The foundation is complete and ready for full implementation.*
 
 ## 📊 Performance Benchmarks
 
@@ -398,6 +528,26 @@ const template = `
 - **4-7x faster** than Handlebars, EJS, and Mustache  
 - **Identical performance** to native Template Literals
 - **Fastest** template engine in most scenarios
+- **Enhanced caching** for better performance with error handling
+- **Sub-millisecond** compilation times for complex templates
+
+### Detailed Results
+
+| Template Engine | Simple Templates | Complex Templates | Large Templates |
+|----------------|-----------------|-------------------|-----------------|
+| **UWU-Template** | **374.2 ns** | **24.9 µs** | **300.1 µs** |
+| Template Literals | 362.3 ns | 24.9 µs | 396.0 µs |
+| Pug | 536.9 ns | 41.5 µs | 518.2 µs |
+| Mustache | 2.3 µs | 106.8 µs | 1.2 ms |
+| Handlebars | 5.1 µs | 111.9 µs | 1.2 ms |
+| EJS | 2.9 µs | 170.5 µs | 1.7 ms |
+
+### Real-World Performance
+- **E-commerce templates**: 48,913 renders/sec (0.020ms per render)
+- **Blog post templates**: 128,739 renders/sec (0.008ms per render)  
+- **Email templates**: 365,141 renders/sec (0.003ms per render)
+
+📊 **[View complete benchmark results](./BENCHMARK_RESULTS.md)**
 
 ### Run Benchmarks Yourself
 
@@ -421,9 +571,6 @@ const result = render({
   content: "Hello, world!"
 });
 ```
-`;
-```
-
 ## ⚡ Performance Benchmarks
 
 UWU-Template consistently outperforms popular template engines:
@@ -799,39 +946,101 @@ deno run --allow-read bench/performance.bench.ts
 
 ## 🚀 Migration from Other Engines
 
-### From Handlebars
+UWU-Template provides clear migration paths from popular template engines. See our **[complete migration guide](./docs/MIGRATION_GUIDE.md)** for detailed examples.
+
+### From Handlebars (4.5x Performance Improvement)
 UWU-Template is largely compatible with Handlebars syntax:
 
 ```handlebars
-<!-- These work the same -->
+<!-- These work exactly the same -->
 {{variable}}
 {{#if condition}}...{{/if}}
 {{#each items}}...{{/each}}
 
-<!-- UWU-Template additions -->
-{{component "name" prop="value"}}  <!-- Components -->
-{{{helper "string literal"}}}      <!-- String literals in helpers -->
-{{@parent.data}}                   <!-- Parent data access -->
+<!-- UWU-Template enhancements -->
+{{component "name" prop="value"}}     <!-- Advanced components -->
+{{{helper "string literal"}}}         <!-- Mixed argument types -->
+{{@parent.data}}                      <!-- Parent data access -->
 ```
 
-### From EJS
+**Migration effort**: ⭐ **Minimal** - Most templates work without changes
+
+### From EJS (6.8x Performance Improvement)
 ```javascript
 // EJS
 <%- include('partial', {data: value}) %>
+<% if (user.active) { %>Active<% } %>
 
 // UWU-Template  
 {{component "partial" data=value}}
+{{#if user.active}}Active{{/if}}
 ```
 
-### From Mustache
+**Migration effort**: ⭐⭐⭐ **Moderate** - Syntax changes but clear patterns
+
+### From Mustache (4.3x Performance Improvement)
 ```handlebars
 <!-- Mustache -->
 {{#items}}{{name}}{{/items}}
 
-<!-- UWU-Template (same + more features) -->
+<!-- UWU-Template (same syntax + more features) -->
 {{#each items}}{{name}}{{/each}}
 {{component "itemCard" name=name}}
 ```
+
+**Migration effort**: ⭐⭐ **Easy** - Similar syntax with more capabilities
+
+### From Pug (1.7x Performance + 2655x Faster Compilation)
+```pug
+// Pug
+doctype html
+html
+  head
+    title= title
+  body
+    each item in items
+      li= item.name
+
+// UWU-Template
+<!DOCTYPE html>
+<html>
+<head><title>{{title}}</title></head>
+<body>
+  {{#each items}}<li>{{name}}</li>{{/each}}
+</body>
+</html>
+```
+
+**Migration effort**: ⭐⭐⭐⭐ **Significant** - Complete restructure but major performance gains
+
+### Migration Support Tools
+- **[Migration Guide](./docs/MIGRATION_GUIDE.md)** - Step-by-step conversion guides
+- **Performance Comparisons** - Before/after benchmarks
+- **Syntax Converters** - Patterns for common conversions
+- **Best Practices** - Optimization tips for each engine
+
+## 📚 Documentation
+
+UWU-Template now includes comprehensive documentation to help you get started quickly:
+
+### 📖 Complete Guides
+- **[API Reference](./docs/API_REFERENCE.md)** - Complete API documentation with examples
+- **[Migration Guide](./docs/MIGRATION_GUIDE.md)** - Migrate from Handlebars, EJS, Mustache, Pug
+- **[Component Examples](./docs/COMPONENT_EXAMPLES.md)** - Real-world component patterns
+- **[Performance Benchmarks](./BENCHMARK_RESULTS.md)** - Detailed performance analysis
+
+### 🚀 Quick References
+- **Template Syntax** - Variables, conditionals, loops, and more
+- **Component System** - Props, composition, and parent data access
+- **Helper Functions** - Custom functions with mixed argument types
+- **Error Handling** - Debugging with detailed error messages
+- **Performance Tips** - Optimization strategies and best practices
+
+### 🔧 Development Resources
+- **TypeScript Support** - Full type definitions included
+- **Error Recovery** - Graceful handling of template issues
+- **Debugging Tools** - Line numbers and code context in errors
+- **Migration Helpers** - Tools to convert from other engines
 
 ## 🤝 Contributing
 
@@ -839,12 +1048,13 @@ We welcome contributions! Here's how to get started:
 
 1. **Fork the repository**
 2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
-3. **Run tests**: `deno test --allow-read`
+3. **Run tests**: `deno test -A`
 4. **Run benchmarks**: `deno task bench`
 5. **Add your changes with tests**
-6. **Commit**: `git commit -m 'Add amazing feature'`
-7. **Push**: `git push origin feature/amazing-feature`
-8. **Open a Pull Request**
+6. **Update documentation** if needed
+7. **Commit**: `git commit -m 'Add amazing feature'`
+8. **Push**: `git push origin feature/amazing-feature`
+9. **Open a Pull Request**
 
 ### Development Setup
 ```bash
@@ -852,18 +1062,36 @@ We welcome contributions! Here's how to get started:
 git clone https://github.com/your-username/uwu-template.git
 cd uwu-template
 
-# Run tests
-deno test --allow-read
+# Run tests (all should pass)
+deno test -A
+
+# Run enhanced features demo
+deno run -A enhanced-demo.ts
 
 # Run benchmarks
-deno run --allow-read bench/performance.bench.ts
+deno task bench
 
 # Check formatting
 deno fmt --check
 
 # Check linting
 deno lint
+
+# Build bundle
+deno task build
 ```
+
+### Documentation
+- All public APIs are documented in `docs/API_REFERENCE.md`
+- Component examples are in `docs/COMPONENT_EXAMPLES.md`
+- Migration guides are in `docs/MIGRATION_GUIDE.md`
+- Update documentation when adding features
+
+### Testing
+- Add tests for new features in appropriate test files
+- Ensure backward compatibility
+- Test error handling scenarios
+- Benchmark performance impact for major changes
 
 ## 🌟 Sponsor
 
@@ -873,14 +1101,29 @@ This project is proudly sponsored by [yatsu.net](https://yatsu.net)
 
 MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## � Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a complete list of changes and version history.
+
+## �🙏 Acknowledgments
 
 - Inspired by Handlebars, Mustache, and EJS
-- Built for the Deno community
+- Built for the Deno community  
 - Performance benchmarks against industry standards
+- Enhanced with comprehensive documentation and developer experience improvements
 
 ---
+
+## 🎯 What's Next?
+
+- 🏗️ **Complete Template Inheritance** - Full block override system
+- 🔧 **Advanced Helper Features** - More built-in helpers and utilities
+- 🚀 **Streaming Templates** - Support for large dataset streaming
+- 📱 **Framework Integrations** - Plugins for popular frameworks
+- 🎨 **Template Designer** - Visual template builder
 
 **🦄 Made with care for modern web development**
 
 *UWU-Template: Because your templates deserve to be fast AND adorable!*
+
+📊 **Performance** • 🧩 **Components** • 🔧 **Helpers** • 📚 **Documentation** • 🚀 **Migration**

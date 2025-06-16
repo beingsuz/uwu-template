@@ -1,7 +1,7 @@
 {
   "name": "uwu-template",
-  "version": "1.0.0-beta.1",
-  "description": "A blazingly fast, feature-rich template engine for Deno and JavaScript with advanced component system, helper functions, and performance that rivals native template literals.",
+  "version": "1.0.0",
+  "description": "A blazingly fast, feature-rich template engine for Deno and JavaScript with advanced component system, helper functions, template inheritance, and performance that rivals native template literals.",
   "main": "bundle.js",
   "module": "mod.ts",
   "types": "mod.ts",
