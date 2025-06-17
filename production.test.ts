@@ -87,7 +87,7 @@ Deno.test("UWU-Template Production Verification", async (t) => {
     await t.step("E-commerce Template - Full Functionality", async () => {
         console.log("Testing e-commerce template with comprehensive data...");
         
-        const template = await Deno.readTextFile("./templates/ecommerce.nnt");
+        const template = await Deno.readTextFile("./templates/ecommerce.uwu");
         const compiled = compile(template);
 
         const data = {
@@ -172,7 +172,7 @@ Deno.test("UWU-Template Production Verification", async (t) => {
     await t.step("Blog Post Template - Complete Features", async () => {
         console.log("Testing blog post template...");
         
-        const template = await Deno.readTextFile("./templates/blog-post.nnt");
+        const template = await Deno.readTextFile("./templates/blog-post.uwu");
         const compiled = compile(template);
 
         const data = {

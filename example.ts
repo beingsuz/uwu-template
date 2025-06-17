@@ -56,7 +56,7 @@ async function main() {
 
     // Example 2: Real-world e-commerce template
     console.log("\n=== Real-World E-commerce Template ===");
-    const ecommerceTemplate = await Deno.readTextFile("./templates/ecommerce.nnt");
+    const ecommerceTemplate = await Deno.readTextFile("./templates/ecommerce.uwu");
     const ecommerceCompiled = compile(ecommerceTemplate);
 
     const ecommerceData = {

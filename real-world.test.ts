@@ -35,7 +35,7 @@ Deno.test("Real-World Template Performance Verification", async (t) => {
     await t.step("E-commerce Template Performance", async () => {
         console.log("Testing e-commerce template performance...");
         
-        const template = await Deno.readTextFile("./templates/ecommerce.nnt");
+        const template = await Deno.readTextFile("./templates/ecommerce.uwu");
         const compiled = compile(template);
         
         const data = {
@@ -104,7 +104,7 @@ Deno.test("Real-World Template Performance Verification", async (t) => {
     await t.step("Blog Post Template Performance", async () => {
         console.log("Testing blog post template performance...");
         
-        const template = await Deno.readTextFile("./templates/blog-post.nnt");
+        const template = await Deno.readTextFile("./templates/blog-post.uwu");
         const compiled = compile(template);
         
         const data = {
@@ -175,7 +175,7 @@ Deno.test("Real-World Template Performance Verification", async (t) => {
     await t.step("Email Template Performance", async () => {
         console.log("Testing email template performance...");
         
-        const template = await Deno.readTextFile("./templates/email.nnt");
+        const template = await Deno.readTextFile("./templates/email.uwu");
         const compiled = compile(template);
         
         const data = {
