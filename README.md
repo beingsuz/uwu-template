@@ -1,6 +1,10 @@
-# UWU-Template 🦄
-
-A **blazingly fast, feature-rich template engine** for Deno and JavaScript with advanced component system, helper functions, template inheritance, and performance that rivals native template literals.
+<div align="center">
+  <img src="uwu.png" alt="UWU Template" width="128" height="128">
+  
+  # UWU-Template 🦄
+  
+  A **blazingly fast, feature-rich template engine** for Deno and JavaScript with advanced component system, helper functions, template inheritance, and performance that rivals native template literals.
+</div>
 
 ## ✨ Features
 
