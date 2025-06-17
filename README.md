@@ -53,6 +53,18 @@ import { compile, registerComponent, registerHelper } from "https://cdn.jsdelivr
 import { compile, registerComponent, registerHelper } from "./mod.ts";
 ```
 
+### 🎨 VS Code Extension
+
+Get syntax highlighting, snippets, and IntelliSense for `.uwu` template files:
+
+**[📦 UWU-Template Language Support](https://marketplace.visualstudio.com/items?itemName=beingsuz.uwu-template-support)**
+
+Features:
+- 🌈 Syntax highlighting for `.uwu` files
+- 📝 Code snippets and auto-completion
+- 🔍 Template validation and error detection
+- 🎯 IntelliSense support
+
 ### Basic Usage
 
 ```typescript
