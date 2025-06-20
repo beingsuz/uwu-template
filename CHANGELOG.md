@@ -18,7 +18,7 @@ and this project adheres to
 
 ---
 
-## [1.1.1] - 2025-01-18
+## [1.1.1] - 2025-06-20
 
 ### 🔧 PATCH RELEASE - Bug Fixes & Enhancements
 
