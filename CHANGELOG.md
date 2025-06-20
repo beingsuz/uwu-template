@@ -11,10 +11,7 @@ and this project adheres to
 ### 🔮 Future Features
 
 - Advanced helper utilities (date, math, string manipulation)
-- Streaming template support for large datasets
 - Framework integrations (Express, Oak, Fresh)
-- Template designer/visual builder
-- Performance optimizations for server-side rendering
 
 ---
 
