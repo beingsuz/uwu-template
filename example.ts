@@ -1,7 +1,11 @@
 import { compile, registerLayout } from "./mod.ts";
 
 // Deno globals - use conditional access for compatibility
-declare const Deno: any;
+declare const Deno:
+	| {
+		readTextFile: (path: string) => Promise<string>;
+	}
+	| undefined;
 
 async function main() {
 	console.log("🎯 UWU-Template Example");
@@ -64,9 +68,11 @@ async function main() {
 
 	// Example 2: Real-world e-commerce template
 	console.log("\n=== Real-World E-commerce Template ===");
-	const ecommerceTemplate = (await (globalThis as any).Deno?.readTextFile(
-		"./templates/ecommerce.uwu",
-	)) || "";
+	const ecommerceTemplate = (await (
+		globalThis as {
+			Deno?: { readTextFile: (path: string) => Promise<string> };
+		}
+	).Deno?.readTextFile("./templates/ecommerce.uwu")) || "";
 	const ecommerceCompiled = compile(ecommerceTemplate);
 
 	const ecommerceData = {

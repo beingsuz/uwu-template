@@ -1101,7 +1101,9 @@ function generateLayoutCode(
 {
     if (layouts.has(${JSON.stringify(layoutName)})) {
         const layoutFunction = compileLayout(${JSON.stringify(layoutName)}, ${
-		JSON.stringify(options)
+		JSON.stringify(
+			options,
+		)
 	});
         result += layoutFunction(${dataVar});
     }
@@ -1137,7 +1139,10 @@ function generateComponentCode(
 		} else {
 			propsEntries.push(
 				`${JSON.stringify(index.toString())}: ${
-					generateDataAccessor(arg, dataVar)
+					generateDataAccessor(
+						arg,
+						dataVar,
+					)
 				}`,
 			);
 		}
@@ -1162,7 +1167,9 @@ function generateComponentCode(
 	});
 	const propsCode = propsEntries.length > 0
 		? `const ${propsVar} = {${
-			propsEntries.join(", ")
+			propsEntries.join(
+				", ",
+			)
 		}, '@parent': ${dataVar}};`
 		: `const ${propsVar} = {'@parent': ${dataVar}};`;
 
@@ -1171,7 +1178,9 @@ function generateComponentCode(
     if (components.has(${JSON.stringify(componentName)})) {
         ${propsCode}
         const ${varName} = compileComponent(${JSON.stringify(componentName)}, ${
-		JSON.stringify(options)
+		JSON.stringify(
+			options,
+		)
 	});
         result += ${varName}(${propsVar});
     }
@@ -1251,12 +1260,17 @@ function generateBlockHelperCode(
 						(value.startsWith("'") && value.endsWith("'"))
 					) {
 						return `${JSON.stringify(key)}: ${
-							JSON.stringify(value.slice(1, -1))
+							JSON.stringify(
+								value.slice(1, -1),
+							)
 						}`;
 					} else {
 						// Otherwise treat as a data accessor
 						return `${JSON.stringify(key)}: ${
-							generateDataAccessor(value, dataVar)
+							generateDataAccessor(
+								value,
+								dataVar,
+							)
 						}`;
 					}
 				})
@@ -1334,7 +1348,9 @@ function generateBlockHelperCode(
             data: ${dataVar}
         };
         const ${resultName} = helpers.get(${
-		JSON.stringify(helperName)
+		JSON.stringify(
+			helperName,
+		)
 	})?.call(null, ${contextArg}, helperOptions);
         if (${resultName} != null) {
             result += String(${resultName});
@@ -1614,7 +1630,9 @@ function generateHelperCall(
 	// Generate code to call helper
 	const helperCode = args.length > 0
 		? `const ${varName} = helpers.get(${
-			JSON.stringify(helperName)
+			JSON.stringify(
+				helperName,
+			)
 		})?.call(null, ${
 			args
 				.map((arg) => {
@@ -1633,7 +1651,9 @@ function generateHelperCall(
 				.join(", ")
 		});`
 		: `const ${varName} = helpers.get(${
-			JSON.stringify(helperName)
+			JSON.stringify(
+				helperName,
+			)
 		})?.call(null);`;
 	if (options.escape) {
 		return `
@@ -1741,21 +1761,27 @@ function generateRawCode(content: string): string {
  */
 function generateExtendsCode(
 	baseTemplateName: string,
-	templateName?: string,
+	_templateName?: string,
 ): string {
 	return `
 {
     // Handle template extends
     const baseTemplate = layouts.get(${
-		JSON.stringify(baseTemplateName)
+		JSON.stringify(
+			baseTemplateName,
+		)
 	}) || components.get(${JSON.stringify(baseTemplateName)});
     if (!baseTemplate) {
         throw new Error('Base template "' + ${
-		JSON.stringify(baseTemplateName)
+		JSON.stringify(
+			baseTemplateName,
+		)
 	} + '" not found');
     }
     const baseCompiled = compileLayout(${
-		JSON.stringify(baseTemplateName)
+		JSON.stringify(
+			baseTemplateName,
+		)
 	}, { escape: true });
     result += baseCompiled(data);
 }
@@ -1779,7 +1805,9 @@ function generateBlockCode(
         templateBlocks.set(${JSON.stringify(blockKey)}, new Map());
     }
     templateBlocks.get(${JSON.stringify(blockKey)}).set(${
-		JSON.stringify(blockName)
+		JSON.stringify(
+			blockName,
+		)
 	}, ${JSON.stringify(content)});
 
     // Render block content immediately (can be overridden)

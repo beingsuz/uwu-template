@@ -17,6 +17,7 @@
 	"lint": {
 		"rules": {
 			"tags": ["recommended"]
-		}
+		},
+		"exclude": ["bundle.js"]
 	}
 }
