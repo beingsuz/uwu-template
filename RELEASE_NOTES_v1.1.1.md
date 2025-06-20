@@ -1,6 +1,6 @@
 # UWU-Template v1.1.1 Release Notes
 
-**Release Date**: January 18, 2025\
+**Release Date**: Juin 20, 2025\
 **Type**: Patch Release\
 **Focus**: Bug Fixes & Developer Experience Enhancements
 
