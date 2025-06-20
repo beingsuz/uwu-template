@@ -1,13 +1,13 @@
-export { 
-    compile, 
-    registerLayout, 
-    registerHelper, 
-    registerBlockHelper, 
-    registerComponent, 
-    renderTemplate,
-    registerBaseTemplate,
-    clearTemplateCache,
-    TemplateError,
-    TemplateSyntaxError,
-    TemplateRuntimeError
+export {
+	clearTemplateCache,
+	compile,
+	registerBaseTemplate,
+	registerBlockHelper,
+	registerComponent,
+	registerHelper,
+	registerLayout,
+	renderTemplate,
+	TemplateError,
+	TemplateRuntimeError,
+	TemplateSyntaxError,
 } from "./src/engine.ts";

@@ -1,18 +1,21 @@
 # 🎉 UWU-Template v1.0.0 - Stable Release
 
-**The fastest template engine for JavaScript and TypeScript is now production ready!**
+**The fastest template engine for JavaScript and TypeScript is now production
+ready!**
 
 ## 🚀 Performance Leadership
 
-UWU-Template delivers **industry-leading performance** with comprehensive benchmarks:
+UWU-Template delivers **industry-leading performance** with comprehensive
+benchmarks:
 
 - **12.7x faster** than Handlebars
-- **6.4x faster** than EJS  
+- **6.4x faster** than EJS
 - **4.3x faster** than Mustache
 - **1.7x faster** than Pug
 - **Competitive with Template Literals** (within 3% performance)
 
 ### Real-World Performance
+
 - **E-commerce**: 46,566 renders/sec (0.021ms per render)
 - **Blog posts**: 130,863 renders/sec (0.008ms per render)
 - **Email templates**: 354,016 renders/sec (0.003ms per render)
@@ -20,6 +23,7 @@ UWU-Template delivers **industry-leading performance** with comprehensive benchm
 ## ✨ Production-Ready Features
 
 ### 🧩 Advanced Component System
+
 ```typescript
 // Register reusable components
 registerComponent("userCard", `
@@ -35,6 +39,7 @@ registerComponent("userCard", `
 ```
 
 ### 🔧 Enhanced Helper System
+
 ```typescript
 // Mixed string literals and variables
 {{{formatPrice productPrice "USD" "Sale: "}}}
@@ -42,12 +47,14 @@ registerComponent("userCard", `
 ```
 
 ### 🛡️ Enhanced Error Handling
+
 - Line and column tracking with code context
 - Template name identification for debugging
 - Comprehensive error categorization (Syntax vs Runtime)
 - Production-grade error recovery
 
 ### 📚 Complete Template Syntax
+
 - Variable interpolation with nested properties
 - Conditionals (if/else/elseif) with complex expressions
 - Loop rendering with index access
@@ -57,8 +64,10 @@ registerComponent("userCard", `
 
 ## 📖 Comprehensive Documentation
 
-- **[Complete API Reference](./docs/API_REFERENCE.md)** - Full TypeScript documentation
-- **[Migration Guide](./docs/MIGRATION_GUIDE.md)** - Upgrade from Handlebars, EJS, Mustache, Pug
+- **[Complete API Reference](./docs/API_REFERENCE.md)** - Full TypeScript
+  documentation
+- **[Migration Guide](./docs/MIGRATION_GUIDE.md)** - Upgrade from Handlebars,
+  EJS, Mustache, Pug
 - **[Component Examples](./docs/COMPONENT_EXAMPLES.md)** - Real-world patterns
 - **[Performance Benchmarks](./BENCHMARK_RESULTS.md)** - Detailed analysis
 
@@ -94,14 +103,15 @@ const template = `
 
 const render = compile(template);
 const html = render({
-  title: "My App",
-  user: { name: "Alice", premium: true }
+	title: "My App",
+	user: { name: "Alice", premium: true },
 });
 ```
 
 ## 🔄 Migration from Other Engines
 
 ### From Handlebars (4.5x Performance Improvement)
+
 ```handlebars
 <!-- These work exactly the same -->
 {{variable}}
@@ -115,6 +125,7 @@ const html = render({
 ```
 
 ### From EJS (6.8x Performance Improvement)
+
 ```javascript
 // EJS
 <%- include('partial', {data: value}) %>
@@ -144,7 +155,8 @@ const html = render({
 
 ## 🤝 Contributing
 
-We welcome contributions! See our [contributing guidelines](./README.md#contributing) for how to get started.
+We welcome contributions! See our
+[contributing guidelines](./README.md#contributing) for how to get started.
 
 ## 📄 License
 
@@ -154,6 +166,7 @@ MIT License - see [LICENSE](./LICENSE) file for details.
 
 **🦄 Made with care for modern web development**
 
-*UWU-Template: Because your templates deserve to be fast AND adorable!*
+_UWU-Template: Because your templates deserve to be fast AND adorable!_
 
-📊 **Performance** • 🧩 **Components** • 🔧 **Helpers** • 📚 **Documentation** • 🚀 **Migration**
+📊 **Performance** • 🧩 **Components** • 🔧 **Helpers** • 📚 **Documentation** •
+🚀 **Migration**

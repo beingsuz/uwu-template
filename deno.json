@@ -1,21 +1,22 @@
 {
-  "imports": {
-    "@std/": "https://deno.land/std@0.224.0/"
-  },  "tasks": {
-    "example": "deno run --allow-read example.ts",
-    "bench": "deno bench -A --no-check",
-    "test": "deno test -A",
-    "check": "deno check mod.ts example.ts",
-    "fmt": "deno fmt",
-    "lint": "deno lint"
-  },
-  "fmt": {
-    "indentWidth": 4,
-    "useTabs": true
-  },
-  "lint": {
-    "rules": {
-      "tags": ["recommended"]
-    }
-  }
+	"imports": {
+		"@std/": "https://deno.land/std@0.224.0/"
+	},
+	"tasks": {
+		"example": "deno run --allow-read example.ts",
+		"bench": "deno bench -A --no-check",
+		"test": "deno test -A",
+		"check": "deno check mod.ts example.ts",
+		"fmt": "deno fmt",
+		"lint": "deno lint"
+	},
+	"fmt": {
+		"indentWidth": 4,
+		"useTabs": true
+	},
+	"lint": {
+		"rules": {
+			"tags": ["recommended"]
+		}
+	}
 }

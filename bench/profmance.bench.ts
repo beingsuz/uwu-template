@@ -1,7 +1,7 @@
 /**
  * Comprehensive Template Engine Benchmark
  * Fair comparison of UWU-Template vs popular template engines
- * 
+ *
  * Run with: deno bench -A
  * Or from root: deno bench bench/profmance.bench.ts -A
  */
@@ -14,42 +14,42 @@ import pug from "npm:pug@3.0.2";
 
 // Test data
 const simpleData = {
-  title: "My Website",
-  user: {
-    name: "Alice Johnson",
-    premium: true
-  },
-  items: [
-    { name: "Widget A", price: 29.99, sale: false },
-    { name: "Widget B", price: 19.99, sale: true },
-    { name: "Widget C", price: 39.99, sale: false }
-  ]
+	title: "My Website",
+	user: {
+		name: "Alice Johnson",
+		premium: true,
+	},
+	items: [
+		{ name: "Widget A", price: 29.99, sale: false },
+		{ name: "Widget B", price: 19.99, sale: true },
+		{ name: "Widget C", price: 39.99, sale: false },
+	],
 };
 
 const complexData = {
-  ...simpleData,
-  products: Array.from({ length: 100 }, (_, i) => ({
-    id: i + 1,
-    name: `Product ${i + 1}`,
-    price: Math.round((Math.random() * 100 + 10) * 100) / 100,
-    category: ["Electronics", "Clothing", "Books", "Home"][i % 4],
-    inStock: Math.random() > 0.3,
-    rating: Math.round(Math.random() * 5 * 10) / 10,
-    reviews: Math.floor(Math.random() * 500)
-  }))
+	...simpleData,
+	products: Array.from({ length: 100 }, (_, i) => ({
+		id: i + 1,
+		name: `Product ${i + 1}`,
+		price: Math.round((Math.random() * 100 + 10) * 100) / 100,
+		category: ["Electronics", "Clothing", "Books", "Home"][i % 4],
+		inStock: Math.random() > 0.3,
+		rating: Math.round(Math.random() * 5 * 10) / 10,
+		reviews: Math.floor(Math.random() * 500),
+	})),
 };
 
 const largeData = {
-  ...complexData,
-  products: Array.from({ length: 1000 }, (_, i) => ({
-    id: i + 1,
-    name: `Product ${i + 1}`,
-    price: Math.round((Math.random() * 100 + 10) * 100) / 100,
-    category: ["Electronics", "Clothing", "Books", "Home"][i % 4],
-    inStock: Math.random() > 0.3,
-    rating: Math.round(Math.random() * 5 * 10) / 10,
-    reviews: Math.floor(Math.random() * 500)
-  }))
+	...complexData,
+	products: Array.from({ length: 1000 }, (_, i) => ({
+		id: i + 1,
+		name: `Product ${i + 1}`,
+		price: Math.round((Math.random() * 100 + 10) * 100) / 100,
+		category: ["Electronics", "Clothing", "Books", "Home"][i % 4],
+		inStock: Math.random() > 0.3,
+		rating: Math.round(Math.random() * 5 * 10) / 10,
+		reviews: Math.floor(Math.random() * 500),
+	})),
 };
 
 // UWU Templates
@@ -214,33 +214,42 @@ div.dashboard
 
 // Template Literal baselines
 function templateLiteralSimple(data: typeof simpleData) {
-  return `
+	return `
 <div>
   <h1>${data.title}</h1>
   <p>Welcome ${data.user.name}!</p>
-  ${data.user.premium ? '<span class="premium">Premium Member</span>' : ''}
+  ${data.user.premium ? '<span class="premium">Premium Member</span>' : ""}
   <ul>
-    ${data.items.map(item => `<li>${item.name} - ${item.price}${item.sale ? ' (SALE!)' : ''}</li>`).join('')}
+    ${
+		data.items.map((item) =>
+			`<li>${item.name} - ${item.price}${
+				item.sale ? " (SALE!)" : ""
+			}</li>`
+		).join("")
+	}
   </ul>
 </div>`;
 }
 
 function templateLiteralComplex(data: typeof complexData) {
-  return `
+	return `
 <div class="dashboard">
   <header><h1>${data.title}</h1></header>
   <section class="products">
-    ${data.products.map(product => `
+    ${
+		data.products.map((product) => `
     <div class="product ${product.category}">
       <h4>${product.name}</h4>
       <p class="price">${product.price}</p>
       <p class="category">${product.category}</p>
-      ${product.inStock ? 
-        '<span class="in-stock">In Stock</span>' : 
-        '<span class="out-of-stock">Out of Stock</span>'
-      }
+      ${
+			product.inStock
+				? '<span class="in-stock">In Stock</span>'
+				: '<span class="out-of-stock">Out of Stock</span>'
+		}
       <div class="rating">Rating: ${product.rating}/5 (${product.reviews} reviews)</div>
-    </div>`).join('')}
+    </div>`).join("")
+	}
   </section>
 </div>`;
 }
@@ -294,20 +303,25 @@ console.log(templateLiteralResult);
 
 // Basic verification (check if all contain key elements)
 const checkOutput = (output: string, engine: string) => {
-  const checks = [
-    output.includes("My Website"),
-    output.includes("Alice Johnson"),
-    output.includes("Premium Member"),
-    output.includes("Widget A"),
-    output.includes("29.99")
-  ];
-  
-  const passed = checks.filter(Boolean).length;
-  console.log(`${engine}: ${passed}/5 checks passed ${passed === 5 ? '✅' : '❌'}`);
-  
-  if (passed !== 5) {
-    console.log(`Failed checks for ${engine}:`, checks.map((c, i) => c ? null : `Check ${i+1}`).filter(Boolean));
-  }
+	const checks = [
+		output.includes("My Website"),
+		output.includes("Alice Johnson"),
+		output.includes("Premium Member"),
+		output.includes("Widget A"),
+		output.includes("29.99"),
+	];
+
+	const passed = checks.filter(Boolean).length;
+	console.log(
+		`${engine}: ${passed}/5 checks passed ${passed === 5 ? "✅" : "❌"}`,
+	);
+
+	if (passed !== 5) {
+		console.log(
+			`Failed checks for ${engine}:`,
+			checks.map((c, i) => c ? null : `Check ${i + 1}`).filter(Boolean),
+		);
+	}
 };
 
 console.log("\n📋 Verification Results:");
@@ -321,28 +335,35 @@ checkOutput(templateLiteralResult, "Template Literal");
 // Test complex templates for basic functionality
 console.log("\nTesting complex templates (sample with 5 products):");
 const sampleComplexData = {
-  ...simpleData,
-  products: complexData.products.slice(0, 5) // Just test with 5 products for verification
+	...simpleData,
+	products: complexData.products.slice(0, 5), // Just test with 5 products for verification
 };
 
 const uwuComplexResult = compiledUWUComplex(sampleComplexData);
 const handlebarsComplexResult = compiledHandlebarsComplex(sampleComplexData);
 const ejsComplexResult = compiledEjsComplex(sampleComplexData);
-const mustacheComplexResult = Mustache.render(mustacheComplex, sampleComplexData);
+const mustacheComplexResult = Mustache.render(
+	mustacheComplex,
+	sampleComplexData,
+);
 const pugComplexResult = compiledPugComplex(sampleComplexData);
 const templateLiteralComplexResult = templateLiteralComplex(sampleComplexData);
 
 const checkComplexOutput = (output: string, engine: string) => {
-  const checks = [
-    output.includes("dashboard"),
-    output.includes("Product 1"),
-    output.includes("In Stock") || output.includes("Out of Stock"),
-    output.includes("Rating:"),
-    output.includes("reviews")
-  ];
-  
-  const passed = checks.filter(Boolean).length;
-  console.log(`${engine}: ${passed}/5 complex checks passed ${passed === 5 ? '✅' : '❌'}`);
+	const checks = [
+		output.includes("dashboard"),
+		output.includes("Product 1"),
+		output.includes("In Stock") || output.includes("Out of Stock"),
+		output.includes("Rating:"),
+		output.includes("reviews"),
+	];
+
+	const passed = checks.filter(Boolean).length;
+	console.log(
+		`${engine}: ${passed}/5 complex checks passed ${
+			passed === 5 ? "✅" : "❌"
+		}`,
+	);
 };
 
 console.log("\n📋 Complex Template Verification:");
@@ -363,39 +384,39 @@ console.log("====================================================");
 // ==========================================
 
 Deno.bench({
-  name: "UWU-Template (Simple)",
-  group: "simple",
-  baseline: true,
-  fn: () => {
-    compiledUWUSimple(simpleData);
-  },
+	name: "UWU-Template (Simple)",
+	group: "simple",
+	baseline: true,
+	fn: () => {
+		compiledUWUSimple(simpleData);
+	},
 });
 
 Deno.bench({
-  name: "UWU-Template (Complex - 100 items)",
-  group: "complex",
-  baseline: true,
-  fn: () => {
-    compiledUWUComplex(complexData);
-  },
+	name: "UWU-Template (Complex - 100 items)",
+	group: "complex",
+	baseline: true,
+	fn: () => {
+		compiledUWUComplex(complexData);
+	},
 });
 
 Deno.bench({
-  name: "UWU-Template (Large - 1000 items)",
-  group: "large",
-  baseline: true,
-  fn: () => {
-    compiledUWUComplex(largeData);
-  },
+	name: "UWU-Template (Large - 1000 items)",
+	group: "large",
+	baseline: true,
+	fn: () => {
+		compiledUWUComplex(largeData);
+	},
 });
 
 Deno.bench({
-  name: "UWU-Template (Compilation)",
-  group: "compilation",
-  baseline: true,
-  fn: () => {
-    compile(uwuSimple);
-  },
+	name: "UWU-Template (Compilation)",
+	group: "compilation",
+	baseline: true,
+	fn: () => {
+		compile(uwuSimple);
+	},
 });
 
 // ==========================================
@@ -403,35 +424,35 @@ Deno.bench({
 // ==========================================
 
 Deno.bench({
-  name: "Handlebars (Simple)",
-  group: "simple",
-  fn: () => {
-    compiledHandlebarsSimple(simpleData);
-  },
+	name: "Handlebars (Simple)",
+	group: "simple",
+	fn: () => {
+		compiledHandlebarsSimple(simpleData);
+	},
 });
 
 Deno.bench({
-  name: "Handlebars (Complex - 100 items)",
-  group: "complex",
-  fn: () => {
-    compiledHandlebarsComplex(complexData);
-  },
+	name: "Handlebars (Complex - 100 items)",
+	group: "complex",
+	fn: () => {
+		compiledHandlebarsComplex(complexData);
+	},
 });
 
 Deno.bench({
-  name: "Handlebars (Large - 1000 items)",
-  group: "large",
-  fn: () => {
-    compiledHandlebarsComplex(largeData);
-  },
+	name: "Handlebars (Large - 1000 items)",
+	group: "large",
+	fn: () => {
+		compiledHandlebarsComplex(largeData);
+	},
 });
 
 Deno.bench({
-  name: "Handlebars (Compilation)",
-  group: "compilation",
-  fn: () => {
-    Handlebars.compile(handlebarsSimple);
-  },
+	name: "Handlebars (Compilation)",
+	group: "compilation",
+	fn: () => {
+		Handlebars.compile(handlebarsSimple);
+	},
 });
 
 // ==========================================
@@ -439,35 +460,35 @@ Deno.bench({
 // ==========================================
 
 Deno.bench({
-  name: "EJS (Simple)",
-  group: "simple",
-  fn: () => {
-    compiledEjsSimple(simpleData);
-  },
+	name: "EJS (Simple)",
+	group: "simple",
+	fn: () => {
+		compiledEjsSimple(simpleData);
+	},
 });
 
 Deno.bench({
-  name: "EJS (Complex - 100 items)",
-  group: "complex",
-  fn: () => {
-    compiledEjsComplex(complexData);
-  },
+	name: "EJS (Complex - 100 items)",
+	group: "complex",
+	fn: () => {
+		compiledEjsComplex(complexData);
+	},
 });
 
 Deno.bench({
-  name: "EJS (Large - 1000 items)",
-  group: "large",
-  fn: () => {
-    compiledEjsComplex(largeData);
-  },
+	name: "EJS (Large - 1000 items)",
+	group: "large",
+	fn: () => {
+		compiledEjsComplex(largeData);
+	},
 });
 
 Deno.bench({
-  name: "EJS (Compilation)",
-  group: "compilation",
-  fn: () => {
-    ejs.compile(ejsSimple);
-  },
+	name: "EJS (Compilation)",
+	group: "compilation",
+	fn: () => {
+		ejs.compile(ejsSimple);
+	},
 });
 
 // ==========================================
@@ -475,35 +496,35 @@ Deno.bench({
 // ==========================================
 
 Deno.bench({
-  name: "Mustache (Simple)",
-  group: "simple",
-  fn: () => {
-    Mustache.render(mustacheSimple, simpleData);
-  },
+	name: "Mustache (Simple)",
+	group: "simple",
+	fn: () => {
+		Mustache.render(mustacheSimple, simpleData);
+	},
 });
 
 Deno.bench({
-  name: "Mustache (Complex - 100 items)",
-  group: "complex",
-  fn: () => {
-    Mustache.render(mustacheComplex, complexData);
-  },
+	name: "Mustache (Complex - 100 items)",
+	group: "complex",
+	fn: () => {
+		Mustache.render(mustacheComplex, complexData);
+	},
 });
 
 Deno.bench({
-  name: "Mustache (Large - 1000 items)",
-  group: "large",
-  fn: () => {
-    Mustache.render(mustacheComplex, largeData);
-  },
+	name: "Mustache (Large - 1000 items)",
+	group: "large",
+	fn: () => {
+		Mustache.render(mustacheComplex, largeData);
+	},
 });
 
 Deno.bench({
-  name: "Mustache (Compilation/Parse)",
-  group: "compilation",
-  fn: () => {
-    Mustache.parse(mustacheSimple);
-  },
+	name: "Mustache (Compilation/Parse)",
+	group: "compilation",
+	fn: () => {
+		Mustache.parse(mustacheSimple);
+	},
 });
 
 // ==========================================
@@ -511,35 +532,35 @@ Deno.bench({
 // ==========================================
 
 Deno.bench({
-  name: "Pug (Simple)",
-  group: "simple",
-  fn: () => {
-    compiledPugSimple(simpleData);
-  },
+	name: "Pug (Simple)",
+	group: "simple",
+	fn: () => {
+		compiledPugSimple(simpleData);
+	},
 });
 
 Deno.bench({
-  name: "Pug (Complex - 100 items)",
-  group: "complex",
-  fn: () => {
-    compiledPugComplex(complexData);
-  },
+	name: "Pug (Complex - 100 items)",
+	group: "complex",
+	fn: () => {
+		compiledPugComplex(complexData);
+	},
 });
 
 Deno.bench({
-  name: "Pug (Large - 1000 items)",
-  group: "large",
-  fn: () => {
-    compiledPugComplex(largeData);
-  },
+	name: "Pug (Large - 1000 items)",
+	group: "large",
+	fn: () => {
+		compiledPugComplex(largeData);
+	},
 });
 
 Deno.bench({
-  name: "Pug (Compilation)",
-  group: "compilation",
-  fn: () => {
-    pug.compile(pugSimple);
-  },
+	name: "Pug (Compilation)",
+	group: "compilation",
+	fn: () => {
+		pug.compile(pugSimple);
+	},
 });
 
 // ==========================================
@@ -547,29 +568,31 @@ Deno.bench({
 // ==========================================
 
 Deno.bench({
-  name: "Template Literal (Simple)",
-  group: "simple",
-  fn: () => {
-    templateLiteralSimple(simpleData);
-  },
+	name: "Template Literal (Simple)",
+	group: "simple",
+	fn: () => {
+		templateLiteralSimple(simpleData);
+	},
 });
 
 Deno.bench({
-  name: "Template Literal (Complex - 100 items)",
-  group: "complex",
-  fn: () => {
-    templateLiteralComplex(complexData);
-  },
+	name: "Template Literal (Complex - 100 items)",
+	group: "complex",
+	fn: () => {
+		templateLiteralComplex(complexData);
+	},
 });
 
 Deno.bench({
-  name: "Template Literal (Large - 1000 items)",
-  group: "large",
-  fn: () => {
-    templateLiteralComplex(largeData);
-  },
+	name: "Template Literal (Large - 1000 items)",
+	group: "large",
+	fn: () => {
+		templateLiteralComplex(largeData);
+	},
 });
 
 console.log("\n📊 Benchmark completed!");
-console.log("UWU-Template performance compared against popular template engines");
+console.log(
+	"UWU-Template performance compared against popular template engines",
+);
 console.log("All templates pre-compiled for fair comparison");

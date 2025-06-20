@@ -1,8 +1,10 @@
 # Migration Guide to UWU-Template
 
-This guide helps you migrate from popular template engines to UWU-Template while taking advantage of its performance benefits and advanced features.
+This guide helps you migrate from popular template engines to UWU-Template while
+taking advantage of its performance benefits and advanced features.
 
 ## Table of Contents
+
 - [From Handlebars](#from-handlebars)
 - [From EJS](#from-ejs)
 - [From Mustache](#from-mustache)
@@ -12,7 +14,8 @@ This guide helps you migrate from popular template engines to UWU-Template while
 
 ## From Handlebars
 
-UWU-Template syntax is very similar to Handlebars, making migration straightforward.
+UWU-Template syntax is very similar to Handlebars, making migration
+straightforward.
 
 ### Basic Syntax (No Changes Needed)
 
@@ -37,43 +40,46 @@ UWU-Template syntax is very similar to Handlebars, making migration straightforw
 ### Helpers Migration
 
 **Handlebars:**
+
 ```javascript
-Handlebars.registerHelper('uppercase', function(str) {
-  return str.toUpperCase();
+Handlebars.registerHelper("uppercase", function (str) {
+	return str.toUpperCase();
 });
 
-Handlebars.registerHelper('repeat', function(count, options) {
-  let result = '';
-  for (let i = 0; i < count; i++) {
-    result += options.fn(this);
-  }
-  return result;
+Handlebars.registerHelper("repeat", function (count, options) {
+	let result = "";
+	for (let i = 0; i < count; i++) {
+		result += options.fn(this);
+	}
+	return result;
 });
 ```
 
 **UWU-Template:**
-```typescript
-import { registerHelper, registerBlockHelper } from "./mod.ts";
 
-registerHelper('uppercase', (str: string) => {
-  return str.toUpperCase();
+```typescript
+import { registerBlockHelper, registerHelper } from "./mod.ts";
+
+registerHelper("uppercase", (str: string) => {
+	return str.toUpperCase();
 });
 
-registerBlockHelper('repeat', (count: unknown, options) => {
-  const num = count as number;
-  let result = '';
-  for (let i = 0; i < num; i++) {
-    result += options.fn({ index: i });
-  }
-  return result;
+registerBlockHelper("repeat", (count: unknown, options) => {
+	const num = count as number;
+	let result = "";
+	for (let i = 0; i < num; i++) {
+		result += options.fn({ index: i });
+	}
+	return result;
 });
 ```
 
 ### Partials to Layouts
 
 **Handlebars:**
+
 ```javascript
-Handlebars.registerPartial('header', headerTemplate);
+Handlebars.registerPartial("header", headerTemplate);
 ```
 
 ```handlebars
@@ -81,10 +87,11 @@ Handlebars.registerPartial('header', headerTemplate);
 ```
 
 **UWU-Template:**
+
 ```typescript
 import { registerLayout } from "./mod.ts";
 
-registerLayout('header', headerTemplate);
+registerLayout("header", headerTemplate);
 ```
 
 ```handlebars
@@ -106,17 +113,20 @@ registerLayout('header', headerTemplate);
 
 ## From EJS
 
-EJS uses a different syntax, requiring more changes but offering significant performance gains.
+EJS uses a different syntax, requiring more changes but offering significant
+performance gains.
 
 ### Variables
 
 **EJS:**
+
 ```ejs
 <h1><%= title %></h1>
 <p><%- rawHtml %></p>
 ```
 
 **UWU-Template:**
+
 ```handlebars
 <h1>{{title}}</h1>
 <p>{{{rawHtml}}}</p>
@@ -125,6 +135,7 @@ EJS uses a different syntax, requiring more changes but offering significant per
 ### Conditionals
 
 **EJS:**
+
 ```ejs
 <% if (user.isActive) { %>
   <span>Active User</span>
@@ -134,6 +145,7 @@ EJS uses a different syntax, requiring more changes but offering significant per
 ```
 
 **UWU-Template:**
+
 ```handlebars
 {{#if user.isActive}}
   <span>Active User</span>
@@ -145,6 +157,7 @@ EJS uses a different syntax, requiring more changes but offering significant per
 ### Loops
 
 **EJS:**
+
 ```ejs
 <% items.forEach(function(item, index) { %>
   <li><%- index %>: <%= item.name %></li>
@@ -152,6 +165,7 @@ EJS uses a different syntax, requiring more changes but offering significant per
 ```
 
 **UWU-Template:**
+
 ```handlebars
 {{#each items}}
   <li>{{@index}}: {{name}}</li>
@@ -161,14 +175,16 @@ EJS uses a different syntax, requiring more changes but offering significant per
 ### Includes
 
 **EJS:**
+
 ```ejs
 <%- include('header', { title: 'My Page' }) %>
 ```
 
 **UWU-Template:**
+
 ```typescript
 // Register as component
-registerComponent('header', headerTemplate);
+registerComponent("header", headerTemplate);
 ```
 
 ```handlebars
@@ -188,6 +204,7 @@ Mustache is logic-less and very similar to UWU-Template syntax.
 ### Basic Syntax (Mostly Compatible)
 
 **Mustache/UWU-Template:**
+
 ```mustache
 {{name}}
 {{#items}}
@@ -201,6 +218,7 @@ Mustache is logic-less and very similar to UWU-Template syntax.
 ### Inverted Sections
 
 **Mustache:**
+
 ```mustache
 {{^items}}
   No items found
@@ -208,6 +226,7 @@ Mustache is logic-less and very similar to UWU-Template syntax.
 ```
 
 **UWU-Template:**
+
 ```handlebars
 {{#if items}}
 {{else}}
@@ -218,21 +237,23 @@ Mustache is logic-less and very similar to UWU-Template syntax.
 ### Lambdas to Helpers
 
 **Mustache:**
+
 ```javascript
 const data = {
-  name: "World",
-  uppercase: function() {
-    return function(text, render) {
-      return render(text).toUpperCase();
-    };
-  }
+	name: "World",
+	uppercase: function () {
+		return function (text, render) {
+			return render(text).toUpperCase();
+		};
+	},
 };
 ```
 
 **UWU-Template:**
+
 ```typescript
-registerHelper('uppercase', (text: string) => {
-  return text.toUpperCase();
+registerHelper("uppercase", (text: string) => {
+	return text.toUpperCase();
 });
 ```
 
@@ -253,6 +274,7 @@ Pug uses indentation-based syntax, requiring significant template rewrites.
 ### Basic Structure
 
 **Pug:**
+
 ```pug
 doctype html
 html
@@ -268,6 +290,7 @@ html
 ```
 
 **UWU-Template:**
+
 ```handlebars
 <!DOCTYPE html>
 <html>
@@ -290,6 +313,7 @@ html
 ### Mixins to Components
 
 **Pug:**
+
 ```pug
 mixin userCard(user)
   .user-card
@@ -300,13 +324,17 @@ mixin userCard(user)
 ```
 
 **UWU-Template:**
+
 ```typescript
-registerComponent('userCard', `
+registerComponent(
+	"userCard",
+	`
 <div class="user-card">
   <h3>{{name}}</h3>
   <p>{{email}}</p>
 </div>
-`);
+`,
+);
 ```
 
 ```handlebars
@@ -329,24 +357,27 @@ registerComponent('userCard', `
 
 ## Performance Comparison
 
-| Template Engine | Rendering Speed | Compilation Speed | Memory Usage |
-|----------------|----------------|-------------------|--------------|
-| UWU-Template   | **Baseline**   | **Baseline**      | **Lowest**   |
-| Template Literals | 1.0x slower  | N/A               | Low          |
-| Pug            | 1.7x slower    | 2655x slower      | Medium       |
-| Mustache       | 4.3x slower    | 1.8x faster       | Medium       |
-| Handlebars     | 4.5x slower    | 19.6x faster      | High         |
-| EJS            | 6.8x slower    | 68x slower        | High         |
+| Template Engine   | Rendering Speed | Compilation Speed | Memory Usage |
+| ----------------- | --------------- | ----------------- | ------------ |
+| UWU-Template      | **Baseline**    | **Baseline**      | **Lowest**   |
+| Template Literals | 1.0x slower     | N/A               | Low          |
+| Pug               | 1.7x slower     | 2655x slower      | Medium       |
+| Mustache          | 4.3x slower     | 1.8x faster       | Medium       |
+| Handlebars        | 4.5x slower     | 19.6x faster      | High         |
+| EJS               | 6.8x slower     | 68x slower        | High         |
 
 ## Advanced Features Migration
 
 ### Template Inheritance
 
-UWU-Template introduces template inheritance not available in most other engines:
+UWU-Template introduces template inheritance not available in most other
+engines:
 
 ```typescript
 // Register base template
-registerBaseTemplate('basePage', `
+registerBaseTemplate(
+	"basePage",
+	`
 <!DOCTYPE html>
 <html>
 <head>
@@ -356,7 +387,8 @@ registerBaseTemplate('basePage', `
   {{#block "content"}}Default Content{{/block}}
 </body>
 </html>
-`);
+`,
+);
 ```
 
 ```handlebars
@@ -377,14 +409,16 @@ UWU-Template provides detailed error messages with line numbers:
 
 ```typescript
 try {
-  const render = compile(template, { escape: true }, "myTemplate");
-  const result = render(data);
+	const render = compile(template, { escape: true }, "myTemplate");
+	const result = render(data);
 } catch (error) {
-  if (error instanceof TemplateSyntaxError) {
-    console.log(`Template "myTemplate" syntax error:`);
-    console.log(`Line ${error.line}, Column ${error.column}: ${error.message}`);
-    console.log(error.context); // Shows code context
-  }
+	if (error instanceof TemplateSyntaxError) {
+		console.log(`Template "myTemplate" syntax error:`);
+		console.log(
+			`Line ${error.line}, Column ${error.column}: ${error.message}`,
+		);
+		console.log(error.context); // Shows code context
+	}
 }
 ```
 
@@ -394,14 +428,17 @@ Components provide better organization than partials:
 
 ```typescript
 // Define reusable components
-registerComponent('productCard', `
+registerComponent(
+	"productCard",
+	`
 <div class="product-card">
   <h3>{{name}}</h3>
   <p class="price">\${{price}}</p>
   <p class="description">{{description}}</p>
   <span class="category {{@parent.theme}}">{{category}}</span>
 </div>
-`);
+`,
+);
 ```
 
 ```handlebars
@@ -418,12 +455,14 @@ registerComponent('productCard', `
 ## Migration Checklist
 
 ### Pre-Migration
+
 - [ ] Audit current template usage
 - [ ] Identify custom helpers/mixins/partials
 - [ ] Create performance benchmarks
 - [ ] Plan template organization
 
 ### During Migration
+
 - [ ] Convert templates to UWU-Template syntax
 - [ ] Migrate helpers and register them properly
 - [ ] Convert partials/includes to layouts or components
@@ -431,6 +470,7 @@ registerComponent('productCard', `
 - [ ] Test with real data
 
 ### Post-Migration
+
 - [ ] Benchmark performance improvements
 - [ ] Optimize templates for UWU-Template features
 - [ ] Consider using template inheritance

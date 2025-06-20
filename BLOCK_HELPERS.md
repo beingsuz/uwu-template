@@ -2,7 +2,8 @@
 
 ## Block Helper Registration with Options
 
-UWU-Template now supports advanced block helpers with options support, allowing you to create powerful reusable template components.
+UWU-Template now supports advanced block helpers with options support, allowing
+you to create powerful reusable template components.
 
 ### Basic Block Helper Registration
 
@@ -10,34 +11,37 @@ UWU-Template now supports advanced block helpers with options support, allowing 
 import { registerBlockHelper } from "./mod.ts";
 
 registerBlockHelper("myHelper", (context: unknown, options: {
-    fn: (context?: unknown) => string;
-    inverse: (context?: unknown) => string;
-    hash?: Record<string, unknown>;
+	fn: (context?: unknown) => string;
+	inverse: (context?: unknown) => string;
+	hash?: Record<string, unknown>;
 }) => {
-    // Your helper logic here
-    if (someCondition) {
-        return options.fn(context);  // Render main content
-    } else {
-        return options.inverse();    // Render {{else}} content
-    }
+	// Your helper logic here
+	if (someCondition) {
+		return options.fn(context); // Render main content
+	} else {
+		return options.inverse(); // Render {{else}} content
+	}
 });
 ```
 
 ### Block Helper Features
 
 #### 1. Context Passing
+
 ```typescript
 // Template: {{#myHelper user}}{{name}}{{/myHelper}}
 // The helper receives the 'user' object as context
 ```
 
 #### 2. Hash Options
+
 ```typescript
 // Template: {{#myHelper user role="admin" theme="dark"}}...{{/myHelper}}
 // Access via options.hash.role and options.hash.theme
 ```
 
 #### 3. If/Else Logic
+
 ```typescript
 // Template:
 // {{#myHelper condition}}
@@ -50,16 +54,17 @@ registerBlockHelper("myHelper", (context: unknown, options: {
 ### Real Examples
 
 #### Conditional User Display
+
 ```typescript
 registerBlockHelper("withUser", (user: unknown, options) => {
-    const userData = user as { active?: boolean };
-    const role = options.hash?.role || "user";
-    
-    if (userData?.active) {
-        return options.fn({ ...userData, role });
-    } else {
-        return options.inverse({ role: "guest" });
-    }
+	const userData = user as { active?: boolean };
+	const role = options.hash?.role || "user";
+
+	if (userData?.active) {
+		return options.fn({ ...userData, role });
+	} else {
+		return options.inverse({ role: "guest" });
+	}
 });
 
 // Usage:
@@ -71,23 +76,24 @@ registerBlockHelper("withUser", (user: unknown, options) => {
 ```
 
 #### Iteration Helper with Options
+
 ```typescript
 registerBlockHelper("times", (count: unknown, options) => {
-    const num = Number(count) || 0;
-    const offset = Number(options.hash?.offset) || 0;
-    
-    if (num <= 0) return options.inverse();
-    
-    let result = '';
-    for (let i = 0; i < num; i++) {
-        result += options.fn({
-            index: i + offset,
-            number: i + offset + 1,
-            isFirst: i === 0,
-            isLast: i === num - 1
-        });
-    }
-    return result;
+	const num = Number(count) || 0;
+	const offset = Number(options.hash?.offset) || 0;
+
+	if (num <= 0) return options.inverse();
+
+	let result = "";
+	for (let i = 0; i < num; i++) {
+		result += options.fn({
+			index: i + offset,
+			number: i + offset + 1,
+			isFirst: i === 0,
+			isLast: i === num - 1,
+		});
+	}
+	return result;
 });
 
 // Usage:
@@ -105,18 +111,21 @@ You can also register simple helpers that accept hash options:
 ```typescript
 import { registerHelper } from "./mod.ts";
 
-registerHelper("format", (value: unknown, options?: { hash?: Record<string, unknown> }) => {
-    const prefix = String(options?.hash?.prefix || "");
-    const suffix = String(options?.hash?.suffix || "");
-    const transform = String(options?.hash?.transform || "");
-    
-    let result = String(value || "");
-    
-    if (transform === "upper") result = result.toUpperCase();
-    if (transform === "lower") result = result.toLowerCase();
-    
-    return `${prefix}${result}${suffix}`;
-});
+registerHelper(
+	"format",
+	(value: unknown, options?: { hash?: Record<string, unknown> }) => {
+		const prefix = String(options?.hash?.prefix || "");
+		const suffix = String(options?.hash?.suffix || "");
+		const transform = String(options?.hash?.transform || "");
+
+		let result = String(value || "");
+
+		if (transform === "upper") result = result.toUpperCase();
+		if (transform === "lower") result = result.toLowerCase();
+
+		return `${prefix}${result}${suffix}`;
+	},
+);
 
 // Usage: {{format name prefix="Mr. " transform="upper"}}
 ```
@@ -130,4 +139,6 @@ registerHelper("format", (value: unknown, options?: { hash?: Record<string, unkn
 
 ### Performance Notes
 
-Block helpers are compiled to optimized JavaScript functions just like other UWU-Template features, maintaining the engine's high performance characteristics.
+Block helpers are compiled to optimized JavaScript functions just like other
+UWU-Template features, maintaining the engine's high performance
+characteristics.
